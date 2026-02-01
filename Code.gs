@@ -1,5 +1,241 @@
 /** @OnlyCurrentDoc */
 
+// ========== 지능형 서식 엔진 (STYLE_CONFIG) ==========
+// 학회별 규정에 유연히 대응하는 변수 기반 서식 엔진.
+// STYLE_CONFIG = DocumentProperties에 저장된 런타임 설정 (getEffectiveConfig()로 조회).
+
+/** 스타일 프리셋: APA 7th, MLA, Custom 시 기본값으로 사용 */
+var STYLE_PRESETS = {
+  APA: {
+    italicsTitle: true,
+    italicsJournal: true,
+    yearBracket: '()',
+    authorSeparator: ', ',
+    etAlThreshold: 3,
+    etAlEn: 'et al.',
+    etAlKo: '외',
+    headerFontSize: 14,
+    headerAlignment: 'CENTER',
+    lineSpacing: 12,
+    hangingIndent: 20,
+    indentFirstLine: 0,
+    korItalicsJournal: false,
+    usePagePrefix: true,
+    korUsePagePrefix: false,
+    bibliographyUseEtAl: false
+  },
+  MLA: {
+    italicsTitle: true,
+    italicsJournal: true,
+    yearBracket: 'none',
+    authorSeparator: ', ',
+    etAlThreshold: 3,
+    etAlEn: 'et al.',
+    etAlKo: '외',
+    headerFontSize: 14,
+    headerAlignment: 'CENTER',
+    lineSpacing: 12,
+    hangingIndent: 20,
+    indentFirstLine: 0,
+    korItalicsJournal: false,
+    usePagePrefix: true,
+    korUsePagePrefix: false,
+    bibliographyUseEtAl: false
+  }
+};
+
+/** 현재 문서에 적용된 STYLE_CONFIG 객체 반환 (저장값 없으면 APA 프리셋) */
+function getEffectiveConfig() {
+  var props = PropertiesService.getDocumentProperties();
+  var saved = props.getProperty('STYLE_CONFIG');
+  if (!saved) return Object.assign({}, STYLE_PRESETS.APA);
+  try {
+    var parsed = JSON.parse(saved);
+    var base = parsed.preset && STYLE_PRESETS[parsed.preset] ? STYLE_PRESETS[parsed.preset] : STYLE_PRESETS.APA;
+    return Object.assign({}, base, parsed.config || {});
+  } catch (e) {
+    return Object.assign({}, STYLE_PRESETS.APA);
+  }
+}
+
+function getStyleConfig() {
+  try {
+    var props = PropertiesService.getDocumentProperties();
+    var saved = props.getProperty('STYLE_CONFIG');
+    if (!saved) return JSON.stringify({ ok: true, config: STYLE_PRESETS.APA, preset: 'APA' });
+    var parsed = JSON.parse(saved);
+    var base = (parsed.preset && STYLE_PRESETS[parsed.preset]) ? STYLE_PRESETS[parsed.preset] : STYLE_PRESETS.APA;
+    var config = Object.assign({}, base, parsed.config || {});
+    return JSON.stringify({ ok: true, config: config, preset: parsed.preset || 'APA' });
+  } catch (e) {
+    return JSON.stringify({ ok: true, config: STYLE_PRESETS.APA, preset: 'APA' });
+  }
+}
+
+function saveStyleConfig(configObj) {
+  try {
+    var props = PropertiesService.getDocumentProperties();
+    var cfg = configObj.config || configObj;
+    var preset = configObj.preset || 'Custom';
+    if (preset === 'APA' || preset === 'MLA') {
+      cfg = Object.assign({}, STYLE_PRESETS[preset], cfg);
+    }
+    props.setProperty('STYLE_CONFIG', JSON.stringify({ config: cfg, preset: preset }));
+    return JSON.stringify({ ok: true });
+  } catch (e) {
+    return JSON.stringify({ ok: false, error: (e && e.message) ? e.message : String(e) });
+  }
+}
+
+function isKoreanCitation(authorStr) {
+  if (!authorStr || typeof authorStr !== 'string') return false;
+  return /[\uac00-\ud7a3\u4e00-\u9fff]/.test(authorStr);
+}
+
+/** 문장 내 인용(In-text)용 저자 포맷: 국문은 '외', 영문은 3인 이상 시 '첫 저자 et al.' 강제 */
+function formatInTextCitation(authorRaw, year, style) {
+  var isKo = isKoreanCitation(authorRaw || '');
+  var author = formatAuthorsForInText(authorRaw || '', isKo);
+  var s = (style || 'APA').toUpperCase();
+  return s === 'APA' ? '(' + author + ', ' + year + ')' : '(' + author + ' ' + year + ')';
+}
+
+/** 문장 내 인용 전용: 3인 이상이면 첫 저자 성(surname) + et al./외 */
+function formatAuthorsForInText(authorStr, isKo) {
+  if (!authorStr) return 'Unknown';
+  var parts = authorStr.split(';').map(function(s) { return s.trim(); }).filter(function(s) { return s; });
+  if (parts.length === 0) return 'Unknown';
+  var etAl = isKo ? '외' : 'et al.';
+  var th = 3;
+  function firstSurname(part) {
+    var p = (part || '').trim();
+    var comma = p.indexOf(',');
+    return comma >= 0 ? p.substring(0, comma).trim() : p;
+  }
+  if (parts.length > th) return firstSurname(parts[0]) + ' ' + etAl;
+  if (parts.length === 1 && parts[0].indexOf(',') >= 0) {
+    var segs = parts[0].split(',').map(function(s) { return s.trim(); }).filter(function(s) { return s; });
+    if (segs.length >= 4) return segs[0] + ' ' + etAl;
+  }
+  var sep = ', ';
+  return parts.join(sep);
+}
+
+/** 사이드바용: 문장 내 인용 문자열 반환 (국문=외, 영문=et al.) */
+function getInTextCitationString(authorRaw, year, style) {
+  return formatInTextCitation(authorRaw || '', year || '', style || 'APA');
+}
+
+/**
+ * 저자 문자열을 STYLE_CONFIG에 따라 포맷 (국문 '외', 영문 'et al.').
+ * @param {boolean} isBibliography - true면 참고문헌 목록용으로 etAlThreshold 무시·전체 명단 반환 (bibliographyUseEtAl가 true일 때만 et al./외 적용)
+ */
+function formatAuthorsWithConfig(authorStr, cfg, isKo, isBibliography) {
+  if (!authorStr) return 'Unknown';
+  var parts = authorStr.split(';').map(function(s) { return s.trim(); }).filter(function(s) { return s; });
+  if (parts.length === 0) return 'Unknown';
+  var sep = (cfg && cfg.authorSeparator !== undefined) ? cfg.authorSeparator : ', ';
+  var etAl = isKo ? (cfg && cfg.etAlKo) ? cfg.etAlKo : '외' : (cfg && cfg.etAlEn) ? cfg.etAlEn : 'et al.';
+  var th = (cfg && parseInt(cfg.etAlThreshold, 10)) ? parseInt(cfg.etAlThreshold, 10) : 3;
+  if (isBibliography && !(cfg && cfg.bibliographyUseEtAl === true)) return parts.join(sep);
+  if (parts.length <= th) return parts.join(sep);
+  return parts[0] + ' ' + etAl;
+}
+
+/**
+ * 문헌 항목을 STYLE_CONFIG에 따라 포맷팅 (국문/영문 이원화, 리치 텍스트 범위 계산).
+ * 저자 문자열은 authorRaw(원본) 또는 author를 formatAuthorsWithConfig로 포맷하여 사용.
+ * @return {{ text: string, ranges: Array<{ start: number, end: number, format: string }> }}
+ */
+function formatCitationEntry(item, cfg) {
+  if (!item) return { text: '', ranges: [] };
+  cfg = cfg || getEffectiveConfig();
+  var ranges = [];
+
+  if (item.mode === 'paste') {
+    return { text: (item.fullText || '').trim(), ranges: [] };
+  }
+
+  var authorRaw = (item.authorRaw || item.author || '').trim();
+  var isKo = isKoreanCitation(authorRaw);
+  var author = formatAuthorsWithConfig(authorRaw, cfg, isKo, true);
+
+  var title = (item.title || '').trim();
+  var year = (item.secondVal || '').trim();
+  var publisher = (item.publisher || '').trim();
+  var volume = (item.volume || '').trim();
+  var issue = (item.issue || '').trim();
+  var page = (item.page || '').trim();
+  var styleName = (item.style || 'APA').toUpperCase();
+
+  var italicsTitle = cfg.italicsTitle === true;
+  var italicsJournal = cfg.italicsJournal === true;
+  if (isKo && cfg.korItalicsJournal === false) italicsJournal = false;
+  var usePagePrefix = cfg.usePagePrefix !== false;
+  var usePpForKor = (cfg.korUsePagePrefix === true) || (cfg.useKorPp === true);
+  var korUsePagePrefix = isKo ? usePpForKor : usePagePrefix;
+  var pagePrefix = (styleName === 'MLA' && (isKo ? korUsePagePrefix : usePagePrefix)) ? (cfg.pagePrefix !== undefined ? cfg.pagePrefix : 'pp. ') : '';
+
+  var yearPart = '';
+  if (cfg.yearBracket === '()') yearPart = ' (' + year + ')';
+  else if (cfg.yearBracket === '[]') yearPart = ' [' + year + ']';
+  else if (year) yearPart = ' ' + year;
+
+  var fullText = '';
+  if (styleName === 'MLA') {
+    fullText = author + '. "' + title + '." ';
+    var mlaTitleStart = author.length + 3;
+    var mlaTitleEnd = mlaTitleStart + title.length;
+    if (italicsTitle && title.length > 0) {
+      ranges.push({ start: mlaTitleStart, end: mlaTitleEnd, format: 'italics' });
+    }
+    var pos = fullText.length;
+    if (publisher) {
+      var mlaPubStart = pos;
+      fullText += publisher + ', ';
+      if (italicsJournal && publisher.length > 0) {
+        ranges.push({ start: mlaPubStart, end: mlaPubStart + publisher.length, format: 'italics' });
+      }
+    }
+    if (volume) fullText += 'vol. ' + volume + (issue ? ', no. ' + issue : '') + (page ? ', ' + pagePrefix + page : '') + '. ';
+    else if (issue) fullText += 'no. ' + issue + (page ? ', ' + pagePrefix + page : '') + '. ';
+    else if (page) fullText += pagePrefix + page + '. ';
+    fullText += year + '.';
+  } else {
+    fullText = author + yearPart + '. ' + title + '. ';
+    var titleStart = author.length + yearPart.length + 2;
+    var titleEnd = titleStart + title.length;
+    if (italicsTitle && title.length > 0) {
+      ranges.push({ start: titleStart, end: titleEnd, format: 'italics' });
+    }
+    var pos = fullText.length;
+    if (publisher) {
+      var pubStart = pos;
+      fullText += publisher;
+      if (italicsJournal && publisher.length > 0) {
+        ranges.push({ start: pubStart, end: pubStart + publisher.length, format: 'italics' });
+      }
+      if (volume || issue || page) {
+        var volIssue = volume ? (volume + (issue ? '(' + issue + ')' : '')) : (issue ? '(' + issue + ')' : '');
+        if (volIssue) fullText += ', ' + volIssue;
+        if (page) fullText += ', ' + (isKo && !korUsePagePrefix ? '' : pagePrefix) + page + '.';
+        else if (volIssue) fullText += '.';
+      } else {
+        fullText += '.';
+      }
+    } else {
+      if (volume || issue || page) {
+        var volIssue2 = volume ? (volume + (issue ? '(' + issue + ')' : '')) : (issue ? '(' + issue + ')' : '');
+        if (volIssue2) fullText += volIssue2;
+        if (page) fullText += (volIssue2 ? ', ' : '') + (isKo && !korUsePagePrefix ? '' : pagePrefix) + page + '.';
+        else if (volIssue2) fullText += '.';
+      }
+    }
+  }
+
+  return { text: fullText.trim(), ranges: ranges };
+}
+
 function onOpen() {
   DocumentApp.getUi().createMenu('인용 관리 메뉴')
       .addItem('사이드바 열기', 'showSidebar')
@@ -21,6 +257,15 @@ function saveCitationOnly(data) {
   try {
     if (!data || typeof data !== 'object') return JSON.stringify({ ok: false, error: '저장할 데이터가 없습니다.' });
     const props = PropertiesService.getDocumentProperties();
+    if (data.korUsePagePrefix !== undefined) {
+      var saved = props.getProperty('STYLE_CONFIG');
+      var preset = 'APA';
+      if (saved) try { var p = JSON.parse(saved); preset = p.preset || 'APA'; } catch (e) {}
+      var cfg = getEffectiveConfig();
+      cfg.korUsePagePrefix = data.korUsePagePrefix === true;
+      saveStyleConfig({ config: cfg, preset: preset });
+      delete data.korUsePagePrefix;
+    }
     let citationList = [];
     try {
       const citations = props.getProperty('CITATION_LIST');
@@ -126,34 +371,252 @@ function generateBibliography() {
     const uniqueCitations = Array.from(uniqueMap.values());
     uniqueCitations.sort(function(a, b) { return (a.author || a.fullText || '').localeCompare(b.author || b.fullText || ''); });
 
-    // 3. 목록 작성 (APA / MLA 양식별)
+    // 3. 목록 작성 (서식 엔진 적용)
+    var cfg = getEffectiveConfig();
+    var headerAlign = cfg.headerAlignment === 'LEFT' ? DocumentApp.HorizontalAlignment.LEFT
+      : cfg.headerAlignment === 'RIGHT' ? DocumentApp.HorizontalAlignment.RIGHT
+      : DocumentApp.HorizontalAlignment.CENTER;
+    var hangIndent = parseInt(cfg.hangingIndent, 10) || 20;
+    var firstLineIndent = parseInt(cfg.indentFirstLine, 10) || 0;
+    var lineSp = parseInt(cfg.lineSpacing, 10) || 12;
+
     body.appendPageBreak();
-    const header = body.appendParagraph('참고문헌');
-    header.setHeading(DocumentApp.ParagraphHeading.HEADING1).setAlignment(DocumentApp.HorizontalAlignment.CENTER);
-    let added = 0;
+    var header = body.appendParagraph('참고문헌');
+    header.setHeading(DocumentApp.ParagraphHeading.HEADING1).setAlignment(headerAlign);
+    if (cfg.headerFontSize) header.editAsText().setFontSize(0, header.getText().length - 1, cfg.headerFontSize);
+
+    var added = 0;
     uniqueCitations.forEach(function(item) {
-      let entry = '';
-      if (item && item.mode === 'manual') {
-        const style = item.style || 'APA';
-        const author = item.author || '';
-        const title = item.title || '';
-        const year = item.secondVal || '';
-        const publisher = item.publisher || '';
-        if (style === 'MLA') {
-          entry = author + '. "' + title + '." ' + (publisher ? publisher + ', ' : '') + year + '.';
-        } else {
-          entry = author + ' (' + year + '). ' + title + '. ' + publisher;
+      var result = formatCitationEntry(item, cfg);
+      if (!result || !result.text || !result.text.trim()) return;
+      var p = body.appendParagraph(result.text.trim());
+      p.setIndentStart(hangIndent).setIndentFirstLine(firstLineIndent).setSpacingBefore(lineSp);
+      if (result.ranges && result.ranges.length > 0) {
+        var textObj = p.editAsText();
+        var len = result.text.length;
+        for (var r = 0; r < result.ranges.length; r++) {
+          var range = result.ranges[r];
+          var endIncl = range.end - 1;
+          if (range.format === 'italics' && range.start >= 0 && endIncl < len && endIncl >= range.start) {
+            textObj.setItalic(range.start, endIncl, true);
+          }
         }
-      } else {
-        entry = (item && item.fullText) ? String(item.fullText) : '';
       }
-      if (!entry.trim()) return;
-      const p = body.appendParagraph(entry.trim());
-      p.setIndentStart(20).setIndentFirstLine(0).setSpacingBefore(12);
       added++;
     });
     return JSON.stringify({ ok: true, count: added });
   } catch (e) {
     return JSON.stringify({ ok: false, count: 0, message: (e && e.message) ? e.message : String(e) });
   }
+}
+
+// ========== 더미 인용 감지 및 매핑 ==========
+
+var SCORE_THRESHOLD = 3;
+
+var DUMMY_SCAN_BLACKLIST = [
+  '그림', '표', 'table', 'fig', 'figure', 'p.', 'pp.', 'page', 'pages',
+  '참고', '주석', 'footnote', 'note', '각주', '출처', 'source', '이미지', 'image',
+  '부록', 'appendix', '수식', 'equation', '식', '참조'
+];
+
+function isBlacklisted(innerContent) {
+  if (!innerContent) return true;
+  var content = innerContent.trim();
+  for (var i = 0; i < DUMMY_SCAN_BLACKLIST.length; i++) {
+    var term = DUMMY_SCAN_BLACKLIST[i].replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    if (new RegExp(term, 'i').test(content)) return true;
+  }
+  return false;
+}
+
+/**
+ * 괄호 () 또는 대괄호 [] 안의 모든 짧은 텍스트(1~30자)를 잠재적 인용 후보로 감지
+ * 한 글자 성(예: (오))도 감지. 그림, 표, p., pp. 등 인용이 아닌 괄호는 블랙리스트로 제외
+ */
+function scanDummyCitations() {
+  try {
+    const doc = DocumentApp.getActiveDocument();
+    const body = doc.getBody();
+    const fullText = body.getText();
+
+    const props = PropertiesService.getDocumentProperties();
+    const citationsStr = props.getProperty('CITATION_LIST');
+    let citationList = [];
+    if (citationsStr) {
+      try { citationList = JSON.parse(citationsStr); } catch (e) {}
+    }
+    if (!Array.isArray(citationList)) citationList = [];
+
+    var re = /[\(\[][^()\[\]]{1,30}[\)\]]/g;
+    var found = {};
+    var dummyList = [];
+    var m;
+
+    while ((m = re.exec(fullText)) !== null) {
+      var fullMatch = m[0];
+      if (found[fullMatch]) continue;
+      found[fullMatch] = true;
+
+      var innerContent = fullMatch.slice(1, -1).trim();
+      if (isBlacklisted(innerContent)) continue;
+
+      var matchResult = fuzzyMatchCitation(citationList, innerContent, fullMatch);
+      var isUnverified = matchResult.score < SCORE_THRESHOLD || matchResult.index < 0;
+      dummyList.push({
+        text: fullMatch,
+        recommendedIndex: matchResult.index,
+        score: matchResult.score,
+        isUnverified: isUnverified
+      });
+    }
+
+    var citationOptions = citationList.map(function(item, idx) {
+      var label = '';
+      if (item.mode === 'manual') {
+        var author = (item.authorRaw || item.author || '').trim();
+        var year = (item.secondVal || '').trim();
+        var title = (item.title || '').trim();
+        label = '[' + author + '(' + year + ')] ' + (title ? title.substring(0, 50) + (title.length > 50 ? '…' : '') : '(제목 없음)');
+      } else {
+        var short = (item.shortText || '').trim();
+        var full = (item.fullText || '').trim();
+        label = short ? '[' + short + '] ' + (full ? full.substring(0, 55) + (full.length > 55 ? '…' : '') : '') : (full ? full.substring(0, 80) + (full.length > 80 ? '…' : '') : '(내용 없음)');
+      }
+      return { index: idx, label: label };
+    });
+
+    return JSON.stringify({ ok: true, dummies: dummyList, citationOptions: citationOptions, threshold: SCORE_THRESHOLD });
+  } catch (e) {
+    return JSON.stringify({ ok: false, error: (e && e.message) ? e.message : String(e) });
+  }
+}
+
+/**
+ * 가중치 기반 스코어링: 저자 +5, 연도 +5, 제목키워드 단어당 +2
+ * @return {{ index: number, score: number }}
+ */
+function fuzzyMatchCitation(citationList, innerContent, fullMatch) {
+  if (citationList.length === 0) return { index: -1, score: 0 };
+  var content = (innerContent || '').toLowerCase();
+
+  var bestIdx = -1;
+  var bestScore = 0;
+
+  for (var i = 0; i < citationList.length; i++) {
+    var c = citationList[i];
+    var score = 0;
+
+    var surname = extractSurname(c.author);
+    if (surname && content.indexOf(surname.toLowerCase()) >= 0) score += 5;
+
+    var yr = String(c.secondVal || '');
+    if (yr.length >= 2) {
+      var yrFull = yr;
+      var yrShort = yr.length === 4 ? yr.slice(2) : yr;
+      if (content.indexOf(yrFull) >= 0 || content.indexOf(yrShort) >= 0) score += 5;
+    }
+
+    var titleWords = (c.title || '').match(/[A-Za-z가-힣\uac00-\ud7a3]{3,}/g) || [];
+    for (var w = 0; w < titleWords.length; w++) {
+      if (content.indexOf(titleWords[w].toLowerCase()) >= 0) score += 2;
+    }
+
+    if (c.fullText === fullMatch || (c.shortText && c.shortText === fullMatch)) score += 10;
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestIdx = i;
+    }
+  }
+  return { index: bestScore > 0 ? bestIdx : -1, score: bestScore };
+}
+
+function extractSurname(authorStr) {
+  if (!authorStr || typeof authorStr !== 'string') return '';
+  var s = authorStr.trim();
+  var commaIdx = s.indexOf(',');
+  if (commaIdx >= 0) return s.substring(0, commaIdx).trim();
+  var semiIdx = s.indexOf(';');
+  if (semiIdx >= 0) return s.substring(0, semiIdx).trim();
+  var spaceIdx = s.indexOf(' ');
+  if (spaceIdx >= 0) return s.substring(0, spaceIdx).trim();
+  if (s.length >= 2 && /[\uac00-\ud7a3\u4e00-\u9fff]/.test(s[0])) return s[0];
+  return s;
+}
+
+/**
+ * 사용자 매핑에 따라 문서 내 더미 인용을 정식 인용구로 일괄 치환.
+ * citationIndex === -1(대체하지 않음/Skip)인 항목은 치환하지 않음.
+ * 치환된 인용구는 폰트 색상을 빨간색(#FF0000)으로 설정하여 시각적 피드백 제공.
+ */
+function applyMapping(mappings) {
+  try {
+    if (!mappings || !Array.isArray(mappings) || mappings.length === 0) {
+      return JSON.stringify({ ok: false, error: '매핑 데이터가 없습니다.' });
+    }
+
+    const doc = DocumentApp.getActiveDocument();
+    const body = doc.getBody();
+    const props = PropertiesService.getDocumentProperties();
+    const citationsStr = props.getProperty('CITATION_LIST');
+    let citationList = [];
+    if (citationsStr) {
+      try { citationList = JSON.parse(citationsStr); } catch (e) {}
+    }
+    if (!Array.isArray(citationList)) citationList = [];
+
+    var replaced = 0;
+    for (var i = 0; i < mappings.length; i++) {
+      var m = mappings[i];
+      var citationIndex = parseInt(m.citationIndex, 10);
+      if (citationIndex === -1 || isNaN(citationIndex) || citationIndex < 0 || citationIndex >= citationList.length) continue;
+
+      var citation = citationList[citationIndex];
+      var replacementText = '';
+      if (citation.mode === 'manual') {
+        replacementText = getInTextCitationString(
+          citation.authorRaw || citation.author,
+          citation.secondVal || '',
+          citation.style || 'APA'
+        );
+      } else {
+        replacementText = citation.shortText || citation.fullText || '';
+      }
+      if (!replacementText) continue;
+
+      var searchText = String(m.dummyText || '').trim();
+      if (!searchText) continue;
+
+      var escaped = escapeRegexForReplace(searchText);
+      var safeReplacement = escapeReplacementText(replacementText);
+      body.replaceText(escaped, safeReplacement);
+      var replEscaped = escapeRegexForReplace(safeReplacement);
+      var range = body.findText(replEscaped);
+      while (range) {
+        var el = range.getElement();
+        var start = range.getStartOffset();
+        var end = range.getEndOffsetInclusive();
+        try {
+          el.asText().setForegroundColor(start, end, '#FF0000');
+        } catch (colorErr) {}
+        replaced++;
+        range = body.findText(replEscaped, range);
+      }
+    }
+
+    return JSON.stringify({ ok: true, replaced: replaced });
+  } catch (e) {
+    return JSON.stringify({ ok: false, error: (e && e.message) ? e.message : String(e) });
+  }
+}
+
+/** 정규식 특수문자 이스케이프 (replaceText 검색 패턴용) */
+function escapeRegexForReplace(str) {
+  return String(str).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/** 치환 문자열 내 $, \\ 이스케이프 (replaceText 치환문 오류 방지) */
+function escapeReplacementText(str) {
+  return String(str).replace(/\\/g, '\\\\').replace(/\$/g, '$$');
 }
