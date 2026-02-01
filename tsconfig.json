@@ -1,0 +1,8 @@
+{
+  "compilerOptions": {
+    "lib": ["esnext"],
+    "types": ["google-apps-script"],
+    "target": "ESNext"
+  },
+  "include": ["src/**/*.ts"]
+}
