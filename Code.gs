@@ -92,7 +92,7 @@ function isKoreanCitation(authorStr) {
   return /[\uac00-\ud7a3\u4e00-\u9fff]/.test(authorStr);
 }
 
-/** 문장 내 인용(In-text)용 저자 포맷: 국문은 '외', 영문은 3인 이상 시 '첫 저자 et al.' 강제 */
+/** 문장 내 인용(In-text)용 저자 포맷: 국문은 '외', 영문은 2인 '성 & 성', 3인 이상 '첫 저자 성 et al.' 강제 */
 function formatInTextCitation(authorRaw, year, style) {
   var isKo = isKoreanCitation(authorRaw || '');
   var author = formatAuthorsForInText(authorRaw || '', isKo);
@@ -100,30 +100,113 @@ function formatInTextCitation(authorRaw, year, style) {
   return s === 'APA' ? '(' + author + ', ' + year + ')' : '(' + author + ' ' + year + ')';
 }
 
-/** 문장 내 인용 전용: 3인 이상이면 첫 저자 성(surname) + et al./외 */
+/** 저자 문자열을 지능적으로 분리하는 함수 */
+function smartSplitAuthors(authorStr, isKo) {
+  if (!authorStr) return [];
+  
+  // 1. 세미콜론(;)이 포함되어 있다면, 사용자가 명확히 구분한 것으로 간주하고 세미콜론으로만 자릅니다.
+  if (authorStr.indexOf(';') >= 0) {
+    return authorStr.split(';').map(function(s) { return s.trim(); }).filter(function(s) { return s; });
+  }
+  
+  // 2. 세미콜론이 없고 국문 문헌인 경우에만 쉼표(,)를 구분자로 인정합니다.
+  if (isKo) {
+    return authorStr.split(',').map(function(s) { return s.trim(); }).filter(function(s) { return s; });
+  }
+  
+  // 3. 세미콜론이 없는 영문 문헌의 경우, 쉼표가 있더라도 일단 '한 명의 이름'으로 간주하는 것이 안전합니다.
+  // (예: Smith, John -> 1명 / 만약 2명이라면 Smith; Doe 처럼 세미콜론 사용 권장)
+  return [authorStr.trim()];
+}
+
+/** 위 함수를 적용한 인용 축약 로직 */
 function formatAuthorsForInText(authorStr, isKo) {
-  if (!authorStr) return 'Unknown';
-  var parts = authorStr.split(';').map(function(s) { return s.trim(); }).filter(function(s) { return s; });
+  var parts = smartSplitAuthors(authorStr, isKo);
   if (parts.length === 0) return 'Unknown';
-  var etAl = isKo ? '외' : 'et al.';
-  var th = 3;
-  function firstSurname(part) {
-    var p = (part || '').trim();
-    var comma = p.indexOf(',');
-    return comma >= 0 ? p.substring(0, comma).trim() : p;
+
+  function getSurname(name, isKo) {
+    var p = (name || '').trim();
+    if (isKo) return p; // 국문은 전체 이름 사용
+    // 영문: Lastname, Firstname 형식이면 쉼표 앞이 성. 아니면 공백 뒤가 성.
+    var commaIndex = p.indexOf(',');
+    if (commaIndex >= 0) return p.substring(0, commaIndex).trim();
+    var spaceParts = p.split(' ');
+    return spaceParts[spaceParts.length - 1];
   }
-  if (parts.length > th) return firstSurname(parts[0]) + ' ' + etAl;
-  if (parts.length === 1 && parts[0].indexOf(',') >= 0) {
-    var segs = parts[0].split(',').map(function(s) { return s.trim(); }).filter(function(s) { return s; });
-    if (segs.length >= 4) return segs[0] + ' ' + etAl;
+
+  if (isKo) {
+    if (parts.length >= 3) return parts[0] + ' 외';
+    if (parts.length === 2) return parts[0] + '·' + parts[1];
+    return parts[0];
+  } else {
+    if (parts.length >= 3) return getSurname(parts[0], false) + ' et al.';
+    if (parts.length === 2) return getSurname(parts[0], false) + ' & ' + getSurname(parts[1], false);
+    return getSurname(parts[0], false);
   }
-  var sep = ', ';
-  return parts.join(sep);
 }
 
 /** 사이드바용: 문장 내 인용 문자열 반환 (국문=외, 영문=et al.) */
 function getInTextCitationString(authorRaw, year, style) {
   return formatInTextCitation(authorRaw || '', year || '', style || 'APA');
+}
+
+/**
+ * 통째로 붙여넣은 참고문헌 텍스트를 분석하여 본문 인용구를 제안.
+ * 스타일 앵커(큰따옴표=MLA, 괄호 연도=APA) → 저자 블록 분리 → (?<=\.), 구분자로 개별 저자 식별 → formatAuthorsForInText로 축약형 생성.
+ * @param {string} fullText - 전체 참고문헌 정보(Full) 텍스트
+ * @return {string} JSON. { ok: true, citationText: "(저자, 연도)", year: "연도" } 또는 { ok: false, error: "메시지" }
+ */
+function parseAndSuggestCitation(fullText) {
+  try {
+    if (!fullText || typeof fullText !== 'string') {
+      return JSON.stringify({ ok: false, error: '입력된 텍스트가 없습니다.' });
+    }
+    var text = fullText.trim();
+    if (!text) {
+      return JSON.stringify({ ok: false, error: '입력된 텍스트가 없습니다.' });
+    }
+
+    // 1) 스타일 앵커 탐색: 큰따옴표 → MLA(저자=따옴표 직전), 괄호 4자리 연도 → APA(저자=괄호 직전)
+    var authorBlock = '';
+    var quoteIdx = text.indexOf('"');
+    var apaMatch = text.match(/\((19|20)\d{2}\)/);
+    if (quoteIdx >= 0) {
+      authorBlock = text.substring(0, quoteIdx).trim();
+    } else if (apaMatch) {
+      var parenIdx = text.indexOf(apaMatch[0]);
+      authorBlock = text.substring(0, parenIdx).trim();
+    } else {
+      authorBlock = text;
+    }
+
+    // 연도: 텍스트 내에서 가장 먼저 발견되는 4자리 숫자(19XX/20XX)
+    var yearMatch = text.match(/(19|20)\d{2}/);
+    var year = yearMatch ? yearMatch[0] : '';
+
+    // 2) 저자 블록 내 개별 저자 식별: (?<=\.), 는 저자 구분자. 마침표+알파벳/공백은 이니셜로 보호
+    var authorParts = [];
+    try {
+      authorParts = authorBlock.split(/(?<=\.),\s*/);
+    } catch (e) {
+      authorParts = authorBlock.split(/\.\s*,\s*/);
+    }
+    authorParts = authorParts.map(function(s) { return s.trim(); }).filter(function(s) { return s; });
+    if (authorParts.length > 0) {
+      authorParts[authorParts.length - 1] = authorParts[authorParts.length - 1].replace(/\s*\(\s*(19|20)\d{2}\s*\)\s*$/, '').trim();
+    }
+    var authorJoined = authorParts.length > 0 ? authorParts.join('; ') : authorBlock;
+    if (!authorJoined) authorJoined = authorBlock;
+
+    // 3) formatAuthorsForInText에 전달하여 축약형 생성 후 (저자, 연도) 형태로 조합
+    var isKo = isKoreanCitation(authorJoined);
+    var formattedAuthor = formatAuthorsForInText(authorJoined, isKo);
+    var citationText = year ? '(' + formattedAuthor + ', ' + year + ')' : '(' + formattedAuthor + ')';
+
+    return JSON.stringify({ ok: true, citationText: citationText, year: year });
+  } catch (e) {
+    var errMsg = (e && e.message) ? e.message : String(e);
+    return JSON.stringify({ ok: false, error: '파싱 중 오류가 발생했습니다. 본문 인용구를 수동으로 입력해 주세요. (' + errMsg + ')' });
+  }
 }
 
 /**
@@ -335,11 +418,27 @@ function generateBibliography() {
     const doc = DocumentApp.getActiveDocument();
     const body = doc.getBody();
 
-    // 1. 기존 참고문헌 구역 삭제
+    // 0. 이미 '참고문헌' 섹션이 있는지 검사 (제목 스타일 또는 문서 마지막 섹션인 경우만 오탐 방지)
     const numChildren = body.getNumChildren();
-    let searchIndex = -1;
-    for (let i = 0; i < numChildren; i++) {
-      const child = body.getChild(i);
+    var existingBibliographyError = "이미 '참고문헌' 섹션이 존재합니다. 기존 참고문헌 섹션을 지우거나 '참고문헌' 제목을 잠시 변경한 후 다시 시도해 주세요.";
+    for (var i = 0; i < numChildren; i++) {
+      var child = body.getChild(i);
+      if (child.getType() !== DocumentApp.ElementType.PARAGRAPH) continue;
+      var p = child.asParagraph();
+      if (p.getText().trim() !== '참고문헌') continue;
+      var heading = p.getHeading();
+      var isHeading = (heading !== DocumentApp.ParagraphHeading.NORMAL);
+      var lastSectionThreshold = Math.max(5, Math.floor(numChildren * 0.1));
+      var isInLastSection = (i >= numChildren - lastSectionThreshold);
+      if (isHeading || isInLastSection) {
+        return JSON.stringify({ ok: false, count: 0, message: existingBibliographyError, error: existingBibliographyError });
+      }
+    }
+
+    // 1. 기존 참고문헌 구역 삭제 (위 조건에 해당하지 않는 경우만 여기 도달)
+    var searchIndex = -1;
+    for (var i = 0; i < numChildren; i++) {
+      var child = body.getChild(i);
       if (child.getType() === DocumentApp.ElementType.PARAGRAPH && child.asParagraph().getText().trim() === '참고문헌') {
         searchIndex = i;
         break;
@@ -347,7 +446,7 @@ function generateBibliography() {
     }
     if (searchIndex !== -1) {
       if (searchIndex > 0 && body.getChild(searchIndex - 1).getType() === DocumentApp.ElementType.PAGE_BREAK) searchIndex--;
-      for (let j = body.getNumChildren() - 1; j >= searchIndex; j--) body.removeChild(body.getChild(j));
+      for (var j = body.getNumChildren() - 1; j >= searchIndex; j--) body.removeChild(body.getChild(j));
     }
 
     // 2. 데이터 불러오기 및 정렬

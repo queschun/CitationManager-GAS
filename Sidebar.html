@@ -16,25 +16,85 @@
       .tab-container { display: flex; margin-bottom: 12px; border-bottom: 1px solid #ddd; gap: 8px; }
       .tab { padding: 6px 12px; cursor: pointer; border-bottom: 2px solid transparent; font-size: 12px; }
       .tab.active { border-bottom: 2px solid #1a73e8; font-weight: bold; color: #1a73e8; }
-      #preview { margin-top: 12px; padding: 8px; background: #f8f9fa; border-radius: 4px; min-height: 18px; font-size: 12px; }
-      .dummy-item { margin-bottom: 8px; padding: 6px 8px; background: white; border: 1px solid #e0e0e0; border-radius: 4px; font-size: 12px; }
-      .dummy-item .dummy-text { font-weight: bold; color: #1a73e8; margin-bottom: 4px; }
+      #preview { margin-top: 12px; padding: 8px; background: #f8f9fa; border-radius: 4px; min-height: 18px; font-size: 12px; word-wrap: break-word; overflow-wrap: break-word; white-space: normal; }
+      #preview.preview-error { color: #d93025; }
+      /* 인용 검사 리스트 박스 크기 확대 */
+      .scan-list-box {
+        max-height: 400px !important; /* 300px에서 400px로 확대 */
+        min-height: 150px;
+        overflow-y: auto;
+        border: 1px solid #ddd;
+        padding: 6px;
+        background: #fafafa;
+        margin-bottom: 12px;
+      }
+      .scan-list-box.section-unverified { background: #fff8f8; border-color: #e0e0e0; }
+      .dummy-item { margin-bottom: 2px; padding: 2px 4px; background: white; border: 1px solid #e0e0e0; border-radius: 3px; font-size: 11px; line-height: 1.3; min-height: 0; }
+      .dummy-item .dummy-text { font-weight: bold; color: #1a73e8; margin-bottom: 2px; font-size: 11px; }
       .dummy-item .score-tag { font-size: 10px; color: #666; font-weight: normal; margin-left: 4px; }
       .section-title { font-size: 12px; font-weight: bold; margin: 8px 0 4px 0; color: #333; }
       .section-unverified .section-title { color: #d93025; }
       .warn-tag { font-size: 10px; color: #d93025; background: #fce8e6; padding: 2px 6px; border-radius: 3px; margin-left: 6px; }
-      .dummy-item select { margin-top: 4px; font-size: 12px; padding: 4px; width: 100%; }
-      .checkbox-row { display: flex; flex-direction: row; align-items: center; flex-wrap: nowrap; gap: 8px; margin-bottom: 8px; width: 100%; min-width: 0; }
-      .checkbox-row input[type="checkbox"] { flex-shrink: 0; margin: 0; width: 14px; height: 14px; }
-      .checkbox-row label { margin: 0; font-weight: bold; cursor: pointer; flex: 1; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+      .dummy-item select { margin-top: 2px; font-size: 11px; padding: 2px 4px; width: 100%; min-height: 26px; }
+      /* 서식 설정 탭의 체크박스 행 개선 */
+      .checkbox-row {
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        gap: 8px !important;
+        margin-bottom: 10px !important;
+        width: 100% !important;
+        white-space: normal !important; /* 텍스트가 너무 길면 다음 줄로 자연스럽게 넘어가게 함 */
+      }
+
+      .checkbox-row input[type="checkbox"] {
+        flex-shrink: 0 !important; /* 체크박스 크기 고정 */
+        width: 16px !important;
+        height: 16px !important;
+      }
+
+      .checkbox-row label {
+        font-size: 12px !important;
+        line-height: 1.2 !important;
+        cursor: pointer;
+        flex: 1; /* 남은 공간 차지 */
+        overflow: visible !important; /* 텍스트가 잘리지 않게 함 */
+      }
       select { width: 100%; min-width: 0; min-height: 32px; padding: 6px 24px 6px 8px; appearance: auto; font-size: 12px; }
       #styleEntry .input-group { min-width: 0; }
       #styleEntry select { width: 100%; box-sizing: border-box; }
-      .page-row { display: flex; flex-direction: column; gap: 6px; width: 100%; margin-bottom: 8px; align-items: stretch; }
-      .page-row .page-input-wrap { width: 100%; min-width: 0; }
-      .page-row .page-toggle-row { display: flex; flex-direction: row; align-items: center; flex-wrap: nowrap; gap: 8px; width: 100%; min-width: 0; justify-content: flex-start; align-self: flex-start; }
-      .page-row .page-toggle-row input[type="checkbox"] { flex-shrink: 0; margin: 0; }
-      .page-row .page-toggle-row label { font-size: 12px; white-space: nowrap; margin: 0; flex: 0 0 auto; }
+      /* 페이지 라벨 한 줄: 라벨 좌측, p./pp. 토글 우측 */
+      .page-label-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 4px;
+      }
+
+      .page-label-row > label {
+        margin-bottom: 0;
+      }
+
+      .page-toggle-inline {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+
+      .page-toggle-inline input[type="checkbox"] {
+        width: 13px;
+        height: 13px;
+        margin: 0;
+        flex-shrink: 0;
+      }
+
+      .page-toggle-inline label {
+        margin: 0;
+        font-size: 11px;
+        font-weight: normal;
+        white-space: nowrap;
+        cursor: pointer;
+      }
     </style>
   </head>
   <body>
@@ -68,15 +128,15 @@
           <input type="text" id="issue" placeholder="6">
         </div>
       </div>
-      <div class="input-group page-row">
-        <div class="page-input-wrap">
-          <label>페이지 (Page)</label>
-          <input type="text" id="page" placeholder="10-25 또는 110-120">
+      <div class="input-group">
+        <div class="page-label-row">
+          <label for="page">페이지 (Page)</label>
+          <span class="page-toggle-inline">
+            <input type="checkbox" id="korUsePagePrefixManual">
+            <label for="korUsePagePrefixManual">p./pp. 표시</label>
+          </span>
         </div>
-        <div class="page-toggle-row">
-          <input type="checkbox" id="korUsePagePrefixManual">
-          <label for="korUsePagePrefixManual">p./pp. 접두어 사용</label>
-        </div>
+        <input type="text" id="page" placeholder="10-25 또는 110-120">
       </div>
       <div class="input-group" style="display: flex; gap: 5px;">
         <div style="flex: 1;">
@@ -95,12 +155,17 @@
 
     <div id="pasteEntry" style="display: none;">
       <div class="input-group">
-        <label>본문에 삽입할 문구 (Short)</label>
-        <input type="text" id="shortCit" placeholder="예: (Smith, 2024)">
+        <label for="shortCit">본문 인용구 제안 (수정 가능)</label>
+        <input type="text" id="shortCit" placeholder="예: (Smith, 2024) — 분석 버튼으로 자동 생성">
       </div>
       <div class="input-group">
-        <label>전체 참고문헌 정보 (Full)</label>
+        <label for="fullPaste">전체 참고문헌 정보 (Full)</label>
         <textarea id="fullPaste" rows="5" placeholder="전체 내용을 붙여넣으세요."></textarea>
+        <button type="button" class="btn btn-blue" onclick="analyzeCitation()" style="margin-top: 6px;">지능형 분석 및 인용구 생성</button>
+      </div>
+      <div class="input-group" id="pasteYearWrap">
+        <label for="pasteYear">연도 (분석 결과)</label>
+        <input type="text" id="pasteYear" placeholder="분석 후 자동 입력" readonly style="background: #f0f0f0;">
       </div>
     </div>
 
@@ -290,19 +355,77 @@
         document.getElementById('preview').innerText = "⏳ 저장 중...";
         google.script.run.withSuccessHandler(function(result) {
           try { result = (typeof result === 'string') ? JSON.parse(result) : result; } catch (e) { result = {}; }
-          document.getElementById('preview').innerText = result.error ? "❌ " + result.error : "✅ 서식 설정이 저장되었습니다. 참고문헌 생성 시 적용됩니다.";
+          document.getElementById('preview').innerText = result.error ? "❌ 오류: " + result.error : "✅ 서식 설정이 저장되었습니다. 참고문헌 생성 시 적용됩니다.";
         }).withFailureHandler(function(err) {
           document.getElementById('preview').innerText = "❌ 오류: " + (err && (err.message || err.error || err)) || String(err);
         }).saveStyleConfig({ config: config, preset: preset });
       }
 
       function formatAuthorsForInText(str) {
-        const authors = str.split(';').map(s => s.trim()).filter(s => s !== "");
+        if (!str) return "Unknown";
+        
+        // 국문 여부 판별
+        const isKo = /[\uac00-\ud7a3\u4e00-\u9fff]/.test(str);
+        
+        // 지능형 구분자 분리: 세미콜론이 있으면 세미콜론 우선, 없으면 쉼표로 분리
+        let authors = [];
+        if (str.indexOf(';') >= 0) {
+          authors = str.split(';').map(s => s.trim()).filter(s => s !== "");
+        } else if (isKo) {
+          authors = str.split(',').map(s => s.trim()).filter(s => s !== "");
+        } else {
+          authors = [str.trim()];
+        }
+        
         if (authors.length === 0) return "Unknown";
         if (authors.length === 1) return authors[0];
-        if (authors.length === 2) return authors[0] + " & " + authors[1];
-        const isKo = /[\uac00-\ud7a3\u4e00-\u9fff]/.test(str);
-        return authors[0] + (isKo ? " 외" : " et al.");
+        
+        // 영문 성(Surname) 추출 함수
+        const getSurname = (name) => {
+          const n = name.split(' ');
+          return n[n.length - 1];
+        };
+
+        if (isKo) {
+          // 국문: 2명은 'A & B', 3명 이상은 'A 외'
+          if (authors.length >= 3) return authors[0] + " 외";
+          return authors[0] + " & " + authors[1];
+        } else {
+          // 영문: 3명 이상 'Surname et al.', 2명 'Surname & Surname'
+          if (authors.length >= 3) return getSurname(authors[0]) + " et al.";
+          return getSurname(authors[0]) + " & " + getSurname(authors[1]);
+        }
+      }
+
+      /** 지능형 분석: Code.gs의 parseAndSuggestCitation 호출 후 Short·연도 칸 채움. 실패 시 수동 입력 유도 */
+      function analyzeCitation() {
+        var fullText = (document.getElementById("fullPaste") && document.getElementById("fullPaste").value || "").trim();
+        if (!fullText) {
+          alert("전체 참고문헌 정보(Full)를 먼저 붙여넣으세요.");
+          return;
+        }
+        var preview = document.getElementById("preview");
+        if (preview) preview.innerText = "⏳ 분석 중...";
+        google.script.run
+          .withSuccessHandler(function(resultStr) {
+            try {
+              var result = typeof resultStr === "string" ? JSON.parse(resultStr) : resultStr;
+              if (result && result.ok === true) {
+                if (document.getElementById("shortCit")) document.getElementById("shortCit").value = result.citationText || "";
+                if (document.getElementById("pasteYear")) document.getElementById("pasteYear").value = result.year || "";
+                if (preview) preview.innerText = "✅ 분석 완료. 본문 인용구 제안란을 확인·수정 후 저장하세요.";
+              } else {
+                if (preview) preview.innerText = "⚠️ " + (result && result.error ? result.error : "분석에 실패했습니다. 본문 인용구를 수동으로 입력해 주세요.");
+              }
+            } catch (e) {
+              if (preview) preview.innerText = "⚠️ 결과 처리 중 오류가 발생했습니다. 본문 인용구를 수동으로 입력해 주세요.";
+            }
+          })
+          .withFailureHandler(function(err) {
+            var msg = err && (err.message || err.error || err) ? (err.message || err.error || err) : String(err);
+            if (preview) preview.innerText = "❌ 서버 오류: " + msg + " 본문 인용구를 수동으로 입력해 주세요.";
+          })
+          .parseAndSuggestCitation(fullText);
       }
 
       function handleEntry(action) {
@@ -374,7 +497,11 @@
             document.getElementById('issue').value = "";
             document.getElementById('page').value = "";
           }
-          else { document.getElementById('shortCit').value = ""; document.getElementById('fullPaste').value = ""; }
+          else {
+            document.getElementById('shortCit').value = "";
+            document.getElementById('fullPaste').value = "";
+            if (document.getElementById('pasteYear')) document.getElementById('pasteYear').value = "";
+          }
         }).withFailureHandler(function(err) {
           var msg = (err && (err.message || err.error || err)) || String(err);
           preview.innerText = "❌ 오류(서버 연결): " + msg;
@@ -384,19 +511,28 @@
       }
 
       function handleGenerate() {
-        document.getElementById('preview').innerText = "⏳ 목록 생성 중...";
+        var preview = document.getElementById('preview');
+        preview.className = '';
+        preview.innerText = "⏳ 목록 생성 중...";
         google.script.run.withSuccessHandler(function(result) {
           try { result = (typeof result === 'string') ? JSON.parse(result) : result; } catch (e) { result = {}; }
           if (result && result.ok && result.count > 0) {
-            document.getElementById('preview').innerText = "✅ 참고문헌 " + result.count + "개 생성 완료! (마지막 페이지)";
+            preview.className = '';
+            preview.innerText = "✅ 참고문헌 " + result.count + "개 생성 완료! (마지막 페이지)";
+          } else if (result && result.error) {
+            preview.className = 'preview-error';
+            preview.innerText = "❌ 오류: " + result.error;
           } else if (result && result.message) {
-            document.getElementById('preview').innerText = "⚠️ " + result.message + " 먼저 '저장만 하기' 또는 '본문에 삽입 및 저장'으로 항목을 추가하세요.";
+            preview.className = '';
+            preview.innerText = "⚠️ " + result.message + " 먼저 '저장만 하기' 또는 '본문에 삽입 및 저장'으로 항목을 추가하세요.";
           } else {
-            document.getElementById('preview').innerText = "⚠️ 저장된 참고문헌이 없습니다. 먼저 항목을 추가하세요.";
+            preview.className = '';
+            preview.innerText = "⚠️ 저장된 참고문헌이 없습니다. 먼저 항목을 추가하세요.";
           }
         }).withFailureHandler(function(err) {
           var msg = (err && (err.message || err.error || err)) || String(err);
-          document.getElementById('preview').innerText = "❌ 오류: " + msg;
+          preview.className = 'preview-error';
+          preview.innerText = "❌ 오류: " + msg;
         }).generateBibliography();
       }
 
@@ -458,8 +594,8 @@
             var scoreTag = (score > 0 && !d.isUnverified) ? ' <span class="score-tag">' + score + '점</span>' : '';
             return '<div class="dummy-item" data-index="' + idx + '"><div class="dummy-text">' + escapeHtml(d.text) + scoreTag + warnTag + '</div>' + sel + '</div>';
           };
-          var recHtml = recommended.length > 0 ? '<div class="section-title">추천된 항목 (' + recommended.length + ')</div><div style="max-height: 150px; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px; padding: 8px; background: #fafafa; margin-bottom: 8px;">' + recommended.map(function(d) { return makeItemHtml(d, d._idx); }).join('') + '</div>' : '';
-          var unvHtml = unverified.length > 0 ? '<div class="section-title">미확인 항목 (' + unverified.length + ')</div><div style="max-height: 150px; overflow-y: auto; border: 1px solid #e0e0e0; border-radius: 4px; padding: 8px; background: #fff8f8; margin-bottom: 8px;">' + unverified.map(function(d) { return makeItemHtml(d, d._idx); }).join('') + '</div>' : '';
+          var recHtml = recommended.length > 0 ? '<div class="section-title">추천된 항목 (' + recommended.length + ')</div><div class="scan-list-box">' + recommended.map(function(d) { return makeItemHtml(d, d._idx); }).join('') + '</div>' : '';
+          var unvHtml = unverified.length > 0 ? '<div class="section-title">미확인 항목 (' + unverified.length + ')</div><div class="scan-list-box section-unverified">' + unverified.map(function(d) { return makeItemHtml(d, d._idx); }).join('') + '</div>' : '';
           document.getElementById('recommendedSection').innerHTML = recHtml;
           document.getElementById('unverifiedSection').innerHTML = unvHtml;
           document.getElementById('scanResults').style.display = 'block';
