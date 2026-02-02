@@ -95,59 +95,72 @@
         white-space: nowrap;
         cursor: pointer;
       }
+      /* 서식 설정 탭 버튼 그룹·간격 */
+      .style-btn-group { margin-top: 12px; }
+      .style-btn-group .btn { margin-top: 8px; }
+      .style-btn-group .btn:first-child { margin-top: 0; }
+      .style-btn-sep { margin-top: 16px; padding-top: 12px; border-top: 1px solid #ddd; }
+      .style-btn-sep .btn { margin-top: 8px; }
+      /* 저장된 문헌 리스트 (체크박스) */
+      .citation-list-box {
+        max-height: 220px; overflow-y: auto; border: 1px solid #ddd; padding: 6px; background: #fafafa; margin: 8px 0 10px 0; border-radius: 4px;
+      }
+      .citation-list-item { display: flex; align-items: flex-start; gap: 6px; margin-bottom: 6px; font-size: 11px; line-height: 1.3; }
+      .citation-list-item input[type="checkbox"] { flex-shrink: 0; margin-top: 2px; width: 14px; height: 14px; cursor: pointer; }
+      .citation-list-item label { cursor: pointer; flex: 1; margin: 0; font-weight: normal; }
     </style>
   </head>
   <body>
     <div class="tab-container">
-      <div id="tab1" class="tab active" onclick="switchTab(1)">직접 입력</div>
-      <div id="tab2" class="tab" onclick="switchTab(2)">통째로 붙여넣기</div>
-      <div id="tab3" class="tab" onclick="switchTab(3)">인용 검사</div>
-      <div id="tab4" class="tab" onclick="switchTab(4)">서식 설정</div>
+      <div id="tab1" class="tab active" onclick="switchTab(1)" data-i18n="ui.tabs.manual">직접 입력</div>
+      <div id="tab2" class="tab" onclick="switchTab(2)" data-i18n="ui.tabs.paste">통째로 붙여넣기</div>
+      <div id="tab3" class="tab" onclick="switchTab(3)" data-i18n="ui.tabs.scan">인용 검사</div>
+      <div id="tab4" class="tab" onclick="switchTab(4)" data-i18n="ui.tabs.style">서식 설정</div>
     </div>
 
     <div id="manualEntry">
       <div class="input-group">
-        <label>논문/도서 제목</label>
-        <input type="text" id="title" placeholder="제목을 입력하세요">
+        <label data-i18n="ui.manual.title">논문/도서 제목</label>
+        <input type="text" id="title" data-i18n-placeholder="placeholders.title" placeholder="제목을 입력하세요">
       </div>
       <div class="input-group">
-        <label>저자 (세미콜론 ';'으로 구분)</label>
-        <input type="text" id="author" placeholder="Li, A; Smith, B">
+        <label data-i18n="ui.manual.author">저자 (세미콜론 ';'으로 구분)</label>
+        <input type="text" id="author" data-i18n-placeholder="placeholders.author" placeholder="Li, A; Smith, B">
       </div>
       <div class="input-group">
-        <label>출판사 / 학회 / 저널명</label>
-        <input type="text" id="publisher" placeholder="출판 정보">
+        <label data-i18n="ui.manual.publisher">출판사 / 학회 / 저널명</label>
+        <input type="text" id="publisher" data-i18n-placeholder="placeholders.publisher" placeholder="출판 정보">
       </div>
       <div class="input-group" style="display: flex; gap: 5px;">
         <div style="flex: 1;">
-          <label>권 (Volume)</label>
-          <input type="text" id="volume" placeholder="25">
+          <label data-i18n="ui.manual.volume">권 (Volume)</label>
+          <input type="text" id="volume" data-i18n-placeholder="placeholders.volume" placeholder="25">
         </div>
         <div style="flex: 1;">
-          <label>호 (Issue)</label>
-          <input type="text" id="issue" placeholder="6">
+          <label data-i18n="ui.manual.issue">호 (Issue)</label>
+          <input type="text" id="issue" data-i18n-placeholder="placeholders.issue" placeholder="6">
         </div>
       </div>
       <div class="input-group">
         <div class="page-label-row">
-          <label for="page">페이지 (Page)</label>
+          <label for="page" data-i18n="ui.manual.page">페이지 (Page)</label>
           <span class="page-toggle-inline">
             <input type="checkbox" id="korUsePagePrefixManual">
-            <label for="korUsePagePrefixManual">p./pp. 표시</label>
+            <label for="korUsePagePrefixManual" data-i18n="ui.manual.pagePrefix">p./pp. 표시</label>
           </span>
         </div>
-        <input type="text" id="page" placeholder="10-25 또는 110-120">
+        <input type="text" id="page" data-i18n-placeholder="placeholders.page" placeholder="10-25 또는 110-120">
       </div>
       <div class="input-group" style="display: flex; gap: 5px;">
         <div style="flex: 1;">
-          <label>연도</label>
-          <input type="text" id="year" placeholder="2024">
+          <label data-i18n="ui.manual.year">연도</label>
+          <input type="text" id="year" data-i18n-placeholder="placeholders.year" placeholder="2024">
         </div>
         <div style="flex: 1;">
-          <label>양식</label>
+          <label data-i18n="ui.manual.style">양식</label>
           <select id="style">
-            <option value="APA">APA</option>
-            <option value="MLA">MLA</option>
+            <option value="APA" data-i18n="ui.style.presetAPA">APA</option>
+            <option value="MLA" data-i18n="ui.style.presetMLA">MLA</option>
           </select>
         </div>
       </div>
@@ -155,120 +168,247 @@
 
     <div id="pasteEntry" style="display: none;">
       <div class="input-group">
-        <label for="shortCit">본문 인용구 제안 (수정 가능)</label>
-        <input type="text" id="shortCit" placeholder="예: (Smith, 2024) — 분석 버튼으로 자동 생성">
+        <label for="shortCit" data-i18n="ui.paste.shortLabel">본문 인용구 제안 (수정 가능)</label>
+        <input type="text" id="shortCit" data-i18n-placeholder="placeholders.shortCit" placeholder="예: (Smith, 2024)">
       </div>
       <div class="input-group">
-        <label for="fullPaste">전체 참고문헌 정보 (Full)</label>
-        <textarea id="fullPaste" rows="5" placeholder="전체 내용을 붙여넣으세요."></textarea>
-        <button type="button" class="btn btn-blue" onclick="analyzeCitation()" style="margin-top: 6px;">지능형 분석 및 인용구 생성</button>
+        <label for="fullPaste" data-i18n="ui.paste.fullLabel">전체 참고문헌 정보 (Full)</label>
+        <textarea id="fullPaste" rows="5" data-i18n-placeholder="placeholders.fullPaste" placeholder="전체 내용을 붙여넣으세요."></textarea>
+        <button type="button" class="btn btn-blue" onclick="analyzeCitation()" style="margin-top: 6px;" data-i18n="ui.paste.analyzeBtn">지능형 분석 및 인용구 생성</button>
       </div>
       <div class="input-group" id="pasteYearWrap">
-        <label for="pasteYear">연도 (분석 결과)</label>
-        <input type="text" id="pasteYear" placeholder="분석 후 자동 입력" readonly style="background: #f0f0f0;">
+        <label for="pasteYear" data-i18n="ui.paste.yearLabel">연도 (분석 결과)</label>
+        <input type="text" id="pasteYear" data-i18n-placeholder="placeholders.pasteYear" placeholder="분석 후 자동 입력" readonly style="background: #f0f0f0;">
       </div>
     </div>
 
     <div id="styleEntry" style="display: none;">
-      <p style="font-size: 11px; color: #666; margin-bottom: 8px;">참고문헌 목록의 학회별 서식(Style Settings)을 설정합니다. DocumentProperties에 저장되어 문서 전체에 즉시 반영됩니다.</p>
+      <p id="styleDesc" style="font-size: 11px; color: #666; margin-bottom: 8px;" data-i18n="ui.style.description">참고문헌 목록의 학회별 서식을 설정합니다.</p>
       <div class="input-group">
-        <label>스타일 프리셋</label>
+        <label data-i18n="ui.style.preset">스타일 프리셋</label>
         <select id="stylePreset" onchange="onStylePresetChange()">
-          <option value="APA">APA 7th</option>
-          <option value="MLA">MLA</option>
-          <option value="Custom">Custom</option>
+          <option value="APA" data-i18n="ui.style.presetAPA">APA 7th</option>
+          <option value="MLA" data-i18n="ui.style.presetMLA">MLA</option>
+          <option value="Custom" data-i18n="ui.style.presetCustom">Custom</option>
         </select>
       </div>
       <div class="checkbox-row">
         <input type="checkbox" id="italicsTitle" checked>
-        <label for="italicsTitle">논문/도서 제목 이탤릭체</label>
+        <label for="italicsTitle" data-i18n="ui.style.italicsTitle">논문/도서 제목 이탤릭체</label>
       </div>
       <div class="checkbox-row">
         <input type="checkbox" id="italicsJournal" checked>
-        <label for="italicsJournal">저널명 이탤릭체</label>
+        <label for="italicsJournal" data-i18n="ui.style.italicsJournal">저널명 이탤릭체</label>
       </div>
       <div class="checkbox-row">
         <input type="checkbox" id="korItalicsJournal">
-        <label for="korItalicsJournal">국문 저널명 이탤릭체 (해제 시 국문은 적용 안 함)</label>
+        <label for="korItalicsJournal" data-i18n="ui.style.korItalicsJournal">국문 저널명 이탤릭체</label>
       </div>
       <div class="input-group" style="display: flex; gap: 5px;">
         <div style="flex: 1;">
-          <label>저자 구분자</label>
+          <label data-i18n="ui.style.authorSeparator">저자 구분자</label>
           <select id="authorSeparator" style="width: 100%;">
-            <option value=", ">, (쉼표)</option>
-            <option value=" & ">& (앰퍼샌드)</option>
-            <option value="; ">; (세미콜론)</option>
+            <option value=", " data-i18n="ui.style.separatorComma">, (쉼표)</option>
+            <option value=" & " data-i18n="ui.style.separatorAmp">& (앰퍼샌드)</option>
+            <option value="; " data-i18n="ui.style.separatorSemi">; (세미콜론)</option>
           </select>
         </div>
         <div style="flex: 1;">
-          <label>et al./외 기준 (인)</label>
+          <label data-i18n="ui.style.etAlThreshold">et al./외 기준 (인)</label>
           <input type="number" id="etAlThreshold" min="2" max="10" value="3" style="width: 100%;">
         </div>
       </div>
       <div class="input-group" style="display: flex; gap: 5px;">
         <div style="flex: 1;">
-          <label>줄 간격 (pt)</label>
+          <label data-i18n="ui.style.lineSpacing">줄 간격 (pt)</label>
           <input type="number" id="lineSpacing" min="0" max="36" value="12" style="width: 100%;">
         </div>
         <div style="flex: 1;">
-          <label>매달린 들여쓰기 (pt)</label>
+          <label data-i18n="ui.style.hangingIndent">매달린 들여쓰기 (pt)</label>
           <input type="number" id="hangingIndent" min="0" max="72" value="20" style="width: 100%;">
         </div>
       </div>
       <div class="input-group" style="display: flex; gap: 5px;">
         <div style="flex: 1;">
-          <label>첫 줄 들여쓰기 (pt)</label>
+          <label data-i18n="ui.style.indentFirstLine">첫 줄 들여쓰기 (pt)</label>
           <input type="number" id="indentFirstLine" min="0" max="72" value="0" style="width: 100%;">
         </div>
         <div style="flex: 1;">
-          <label>헤더 글꼴 크기</label>
+          <label data-i18n="ui.style.headerFontSize">헤더 글꼴 크기</label>
           <input type="number" id="headerFontSize" min="8" max="24" value="14" style="width: 100%;">
         </div>
       </div>
       <div class="input-group" style="display: flex; gap: 5px;">
         <div style="flex: 1;">
-          <label>헤더 정렬</label>
+          <label data-i18n="ui.style.headerAlignment">헤더 정렬</label>
           <select id="headerAlignment" style="width: 100%;">
-            <option value="LEFT">왼쪽</option>
-            <option value="CENTER">가운데</option>
-            <option value="RIGHT">오른쪽</option>
+            <option value="LEFT" data-i18n="ui.style.alignLeft">왼쪽</option>
+            <option value="CENTER" data-i18n="ui.style.alignCenter">가운데</option>
+            <option value="RIGHT" data-i18n="ui.style.alignRight">오른쪽</option>
           </select>
         </div>
         <div style="flex: 1;">
-          <label>연도 괄호</label>
+          <label data-i18n="ui.style.yearBracket">연도 괄호</label>
           <select id="yearBracket" style="width: 100%;">
-            <option value="()">( )</option>
-            <option value="[]">[ ]</option>
-            <option value="none">없음</option>
+            <option value="()" data-i18n="ui.style.bracketParen">( )</option>
+            <option value="[]" data-i18n="ui.style.bracketSquare">[ ]</option>
+            <option value="none" data-i18n="ui.style.bracketNone">없음</option>
           </select>
         </div>
       </div>
-      <button class="btn btn-blue" onclick="handleSaveStyle()" style="margin-top: 8px;">설정 저장</button>
-    </div>
-
-    <div id="scanEntry" style="display: none;">
-      <p style="font-size: 11px; color: #666; margin-bottom: 10px;">문서 내 임시 인용 (예: (Kim, 2024), [Kim24])을 감지하고 실제 문헌과 연결합니다.</p>
-      <button class="btn btn-blue" onclick="handleScan()" style="margin-bottom: 10px;">문서 스캔</button>
-      <div id="scanResults" style="display: none;">
-        <div id="recommendedSection" style="margin-bottom: 10px;"></div>
-        <div id="unverifiedSection" class="section-unverified" style="margin-bottom: 10px;"></div>
-        <button class="btn btn-green" onclick="handleApplyMapping()">매핑 적용</button>
+      <div class="style-btn-group">
+        <button class="btn btn-blue" onclick="handleSaveStyle()" data-i18n="ui.style.saveStyle">설정 저장</button>
+        <button class="btn btn-green" onclick="handleGenerate()" data-i18n="ui.common.generateBibliography">참고문헌 목록 생성</button>
+        <button class="btn btn-green" onclick="handleSort()" data-i18n="ui.style.btn_sort">참고문헌 정렬 및 서식 적용</button>
+        <button class="btn btn-gray" onclick="handleFinalize()" data-i18n="ui.style.btn_finalize">최종본 전환</button>
+      </div>
+      <div class="style-btn-sep style-btn-group">
+        <button class="btn btn-red" onclick="handleClear()" data-i18n="ui.common.clearAll">데이터 전체 초기화</button>
       </div>
     </div>
 
-    <p id="insertHint" style="font-size: 11px; color: #666; margin: 8px 0 0 0;">삽입 위치: 본문에서 원하는 곳을 클릭한 뒤 버튼을 누르세요.</p>
-    <div id="entryButtons" style="display: flex; gap: 5px; margin-top: 10px;">
-      <button class="btn btn-blue" onclick="handleEntry('insert')" style="flex: 2;">본문에 삽입 및 저장</button>
-      <button class="btn btn-gray" onclick="handleEntry('save')" style="flex: 1;">저장만 하기</button>
+    <div id="scanEntry" style="display: none;">
+      <p id="scanDesc" style="font-size: 11px; color: #666; margin-bottom: 10px;" data-i18n="ui.scan.description">문서 내 임시 인용을 감지하고 실제 문헌과 연결합니다.</p>
+      <button class="btn btn-blue" onclick="handleScan()" style="margin-bottom: 10px;" data-i18n="ui.scan.scanBtn">문서 스캔</button>
+      <div id="scanResults" style="display: none;">
+        <div id="recommendedSection" style="margin-bottom: 10px;"></div>
+        <div id="unverifiedSection" class="section-unverified" style="margin-bottom: 10px;"></div>
+        <button class="btn btn-green" onclick="handleApplyMapping()" data-i18n="ui.scan.applyMapping">매핑 적용</button>
+      </div>
     </div>
-    <button class="btn btn-green" onclick="handleGenerate()">참고문헌 목록 생성</button>
-    <button class="btn btn-red" onclick="handleClear()">데이터 전체 초기화</button>
-    
-    <p style="font-size: 10px; color: #888; margin-top: 8px;">처음 사용 시 &#39;권한 허용&#39; 창이 뜨면 허용해 주세요.</p>
-    <div id="preview">알림: 대기 중...</div>
+
+    <p id="insertHint" style="font-size: 11px; color: #666; margin: 8px 0 0 0;" data-i18n="ui.common.insertHint">삽입 위치: 본문에서 원하는 곳을 클릭한 뒤 버튼을 누르세요.</p>
+    <div id="citationListSection" style="display: none;">
+      <div id="citationListBox" class="citation-list-box"></div>
+      <button type="button" class="btn btn-blue" id="btnMultiInsert" onclick="handleMultiInsert()" style="margin-bottom: 4px;" data-i18n="ui.paste.btn_multi_insert">선택된 문헌들 일괄 삽입</button>
+      <p id="multiCitationWrapHint" style="font-size: 11px; color: #666; margin: 0 0 8px 0;" data-i18n="ui.paste.multiCitationWrapHint">3개 이상 인용 시 본문이 길어져 줄바꿈이 될 수 있습니다.</p>
+    </div>
+    <div id="entryButtons" style="display: flex; gap: 5px; margin-top: 10px;">
+      <button class="btn btn-blue" onclick="handleEntry('insert')" style="flex: 2;" data-i18n="ui.common.insertAndSave">본문에 삽입 및 저장</button>
+      <button class="btn btn-gray" onclick="handleEntry('save')" style="flex: 1;" data-i18n="ui.common.saveOnly">저장만 하기</button>
+    </div>
+    <div id="commonBibButtons" style="margin-top: 10px;">
+      <button class="btn btn-green" onclick="handleGenerate()" data-i18n="ui.common.generateBibliography">참고문헌 목록 생성</button>
+      <button class="btn btn-red" onclick="handleClear()" data-i18n="ui.common.clearAll">데이터 전체 초기화</button>
+    </div>
+    <p id="permissionHint" style="font-size: 10px; color: #888; margin-top: 8px;" data-i18n="ui.common.permissionHint">처음 사용 시 권한 허용 창이 뜨면 허용해 주세요.</p>
+    <div id="preview" data-i18n="ui.common.previewWaiting">알림: 대기 중...</div>
 
     <script>
       var scanData = null;
+      var citationListData = [];
+      var LANG_PACK = {};
+
+      function t(key) {
+        if (!key || !LANG_PACK) return key;
+        var keys = key.split('.');
+        var v = LANG_PACK;
+        for (var i = 0; i < keys.length; i++) { v = v ? v[keys[i]] : undefined; }
+        return v != null ? String(v) : key;
+      }
+
+      function formatMsg(template, params) {
+        if (!template) return '';
+        var s = String(template);
+        if (!params) return s;
+        for (var k in params) { if (params.hasOwnProperty(k)) s = s.replace(new RegExp('\\{' + k + '\\}', 'g'), String(params[k])); }
+        return s;
+      }
+
+      function applyI18n() {
+        document.querySelectorAll('[data-i18n]').forEach(function(el) {
+          var key = el.getAttribute('data-i18n');
+          var val = t(key);
+          if (val) el.textContent = val;
+        });
+        document.querySelectorAll('[data-i18n-placeholder]').forEach(function(el) {
+          var key = el.getAttribute('data-i18n-placeholder');
+          var val = t(key);
+          if (val) el.placeholder = val;
+        });
+      }
+
+      (function initI18n() {
+        google.script.run.withSuccessHandler(function(pack) {
+          LANG_PACK = pack || {};
+          applyI18n();
+          loadCitationList();
+        }).withFailureHandler(function() {
+          LANG_PACK = {};
+          applyI18n();
+          loadCitationList();
+        }).getLanguagePack();
+      })();
+
+      function getCitationItemLabel(item, noTitle) {
+        if (!item) return '';
+        if (item.mode === 'manual') {
+          var author = (item.authorRaw || item.author || '').trim();
+          var year = (item.secondVal || '').trim();
+          var title = (item.title || '').trim();
+          return '[' + (author ? author + (year ? ' (' + year + ')' : '') : '') + '] ' + (title ? title.substring(0, 50) + (title.length > 50 ? '\u2026' : '') : (noTitle || '(제목 없음)'));
+        } else {
+          var short = (item.shortText || '').trim();
+          var full = (item.fullText || '').trim();
+          return short ? '[' + short + '] ' + (full ? full.substring(0, 55) + (full.length > 55 ? '\u2026' : '') : '') : (full ? full.substring(0, 80) + (full.length > 80 ? '\u2026' : '') : '(내용 없음)');
+        }
+      }
+
+      function loadCitationList() {
+        var box = document.getElementById('citationListBox');
+        if (!box) return;
+        google.script.run.withSuccessHandler(function(result) {
+          try {
+            result = typeof result === 'string' ? JSON.parse(result) : result;
+          } catch (e) {
+            result = { ok: false };
+          }
+          citationListData = (result && result.list) ? result.list : [];
+          if (citationListData.length === 0) {
+            box.innerHTML = '<p style="margin:0;font-size:11px;color:#888;">저장된 문헌이 없습니다.</p>';
+            return;
+          }
+          var html = '';
+          for (var i = 0; i < citationListData.length; i++) {
+            var item = citationListData[i];
+            var id = 'cite_cb_' + i;
+            var label = getCitationItemLabel(item);
+            html += '<div class="citation-list-item"><input type="checkbox" id="' + id + '" data-index="' + i + '"><label for="' + id + '">' + escapeHtml(label) + '</label></div>';
+          }
+          box.innerHTML = html;
+        }).withFailureHandler(function() {
+          citationListData = [];
+          box.innerHTML = '';
+        }).getCitationList();
+      }
+
+      function handleMultiInsert() {
+        var checked = [];
+        document.querySelectorAll('#citationListBox input[type="checkbox"]:checked').forEach(function(cb) {
+          var idx = parseInt(cb.getAttribute('data-index'), 10);
+          if (!isNaN(idx) && idx >= 0 && idx < citationListData.length) checked.push(citationListData[idx]);
+        });
+        if (checked.length === 0) {
+          alert(t('alerts.requiredFields'));
+          return;
+        }
+        var preview = document.getElementById('preview');
+        preview.className = '';
+        preview.innerText = t('messages.processing');
+        google.script.run.withSuccessHandler(function(result) {
+          try { result = typeof result === 'string' ? JSON.parse(result) : result; } catch (e) { result = {}; }
+          if (result && result.error) {
+            preview.className = 'preview-error';
+            preview.innerText = t('messages.errorPrefix') + result.error;
+            return;
+          }
+          preview.innerText = formatMsg(t('messages.multiInsertDone'), { count: result.count || checked.length });
+        }).withFailureHandler(function(err) {
+          var msg = (err && (err.message || err.error || err)) || String(err);
+          preview.className = 'preview-error';
+          preview.innerText = t('messages.errorPrefix') + msg;
+        }).insertMultiCitation(checked);
+      }
 
       function switchTab(num) {
         document.getElementById('manualEntry').style.display = num === 1 ? 'block' : 'none';
@@ -281,9 +421,12 @@
         document.getElementById('tab4').className = num === 4 ? 'tab active' : 'tab';
         var showEntry = (num === 1 || num === 2);
         document.getElementById('insertHint').style.display = showEntry ? 'block' : 'none';
+        document.getElementById('citationListSection').style.display = showEntry ? 'block' : 'none';
         document.getElementById('entryButtons').style.display = showEntry ? 'flex' : 'none';
+        document.getElementById('commonBibButtons').style.display = num === 4 ? 'none' : 'block';
         if (num === 4) loadStyleConfig();
         if (num === 1) loadStyleConfigForManualTab();
+        if (showEntry) loadCitationList();
       }
       function loadStyleConfigForManualTab() {
         google.script.run.withSuccessHandler(function(result) {
@@ -352,12 +495,12 @@
           headerAlignment: document.getElementById('headerAlignment').value || 'CENTER',
           yearBracket: document.getElementById('yearBracket').value || '()'
         };
-        document.getElementById('preview').innerText = "⏳ 저장 중...";
+        document.getElementById('preview').innerText = t('messages.saving');
         google.script.run.withSuccessHandler(function(result) {
           try { result = (typeof result === 'string') ? JSON.parse(result) : result; } catch (e) { result = {}; }
-          document.getElementById('preview').innerText = result.error ? "❌ 오류: " + result.error : "✅ 서식 설정이 저장되었습니다. 참고문헌 생성 시 적용됩니다.";
+          document.getElementById('preview').innerText = result.error ? t('messages.errorPrefix') + result.error : t('messages.styleSaved');
         }).withFailureHandler(function(err) {
-          document.getElementById('preview').innerText = "❌ 오류: " + (err && (err.message || err.error || err)) || String(err);
+          document.getElementById('preview').innerText = t('messages.errorPrefix') + ((err && (err.message || err.error || err)) || String(err));
         }).saveStyleConfig({ config: config, preset: preset });
       }
 
@@ -401,11 +544,11 @@
       function analyzeCitation() {
         var fullText = (document.getElementById("fullPaste") && document.getElementById("fullPaste").value || "").trim();
         if (!fullText) {
-          alert("전체 참고문헌 정보(Full)를 먼저 붙여넣으세요.");
+          alert(t('alerts.pasteFullFirst'));
           return;
         }
         var preview = document.getElementById("preview");
-        if (preview) preview.innerText = "⏳ 분석 중...";
+        if (preview) preview.innerText = t('messages.analyzing');
         google.script.run
           .withSuccessHandler(function(resultStr) {
             try {
@@ -413,17 +556,17 @@
               if (result && result.ok === true) {
                 if (document.getElementById("shortCit")) document.getElementById("shortCit").value = result.citationText || "";
                 if (document.getElementById("pasteYear")) document.getElementById("pasteYear").value = result.year || "";
-                if (preview) preview.innerText = "✅ 분석 완료. 본문 인용구 제안란을 확인·수정 후 저장하세요.";
+                if (preview) preview.innerText = t('messages.analysisDone');
               } else {
-                if (preview) preview.innerText = "⚠️ " + (result && result.error ? result.error : "분석에 실패했습니다. 본문 인용구를 수동으로 입력해 주세요.");
+                if (preview) preview.innerText = "⚠️ " + (result && result.error ? result.error : t('messages.analysisFailed'));
               }
             } catch (e) {
-              if (preview) preview.innerText = "⚠️ 결과 처리 중 오류가 발생했습니다. 본문 인용구를 수동으로 입력해 주세요.";
+              if (preview) preview.innerText = "⚠️ " + t('messages.resultError');
             }
           })
           .withFailureHandler(function(err) {
             var msg = err && (err.message || err.error || err) ? (err.message || err.error || err) : String(err);
-            if (preview) preview.innerText = "❌ 서버 오류: " + msg + " 본문 인용구를 수동으로 입력해 주세요.";
+            if (preview) preview.innerText = t('messages.errorServer') + msg + t('messages.serverErrorPaste');
           })
           .parseAndSuggestCitation(fullText);
       }
@@ -443,9 +586,9 @@
           const page = (document.getElementById('page').value || '').trim();
           const style = document.getElementById('style').value;
 
-          if (!title || !authorInput || !year) { alert("필수 정보를 입력하세요."); return; }
+          if (!title || !authorInput || !year) { alert(t('alerts.requiredFields')); return; }
           const formattedAuthor = formatAuthorsForInText(authorInput);
-          preview.innerText = "⏳ 처리 중...";
+          preview.innerText = t('messages.processing');
           google.script.run.withSuccessHandler(function(fullText) {
             data = {
               mode: 'manual', title: title, author: formattedAuthor, authorRaw: authorInput, secondVal: year,
@@ -454,40 +597,42 @@
             };
             var runner = google.script.run.withSuccessHandler(function(result) {
               try { result = (typeof result === 'string') ? JSON.parse(result) : result; } catch (e) { result = {}; }
-              if (result && result.error) { preview.innerText = "❌ 오류: " + result.error; return; }
-              if (action === 'insert') preview.innerText = (result.at === 'cursor') ? "✅ 커서(선택) 위치에 삽입 및 저장 완료!" : "✅ 본문 맨 끝에 삽입 및 저장 완료. 문서 맨 아래를 확인하세요.";
-              else preview.innerText = "✅ 저장 완료!";
+              if (result && result.error) { preview.innerText = t('messages.errorPrefix') + result.error; return; }
+              if (action === 'insert') preview.innerText = (result.at === 'cursor') ? t('messages.insertAtCursor') : t('messages.insertAtEnd');
+              else preview.innerText = t('messages.saveDone');
+              loadCitationList();
               document.getElementById('title').value = ""; document.getElementById('author').value = ""; document.getElementById('year').value = "";
               document.getElementById('publisher').value = ""; document.getElementById('volume').value = ""; document.getElementById('issue').value = ""; document.getElementById('page').value = "";
             }).withFailureHandler(function(err) {
               var msg = (err && (err.message || err.error || err)) || String(err);
-              preview.innerText = "❌ 오류(서버 연결): " + msg;
+              preview.innerText = t('messages.errorServer') + msg;
             });
             if (action === 'insert') runner.insertCitation(data); else runner.saveCitationOnly(data);
           }).withFailureHandler(function(err) {
-            preview.innerText = "❌ 오류: " + (err && (err.message || err.error || err)) || String(err);
+            preview.innerText = t('messages.errorPrefix') + ((err && (err.message || err.error || err)) || String(err));
           }).getInTextCitationString(authorInput, year, style);
           return;
         } else {
           const shortCit = document.getElementById('shortCit').value;
           const fullText = document.getElementById('fullPaste').value;
-          if (!shortCit || !fullText) { alert("데이터를 모두 입력하세요."); return; }
+          if (!shortCit || !fullText) { alert(t('alerts.enterAllData')); return; }
           data = { mode: 'paste', fullText: fullText.trim(), shortText: shortCit.trim(), title: "Pasted_" + new Date().getTime() };
         }
 
-        preview.innerText = "⏳ 처리 중...";
+        preview.innerText = t('messages.processing');
         var runner = google.script.run.withSuccessHandler(function(result) {
           try { result = (typeof result === 'string') ? JSON.parse(result) : result; } catch (e) { result = {}; }
           if (result && result.error) {
-            preview.innerText = "❌ 오류: " + result.error;
+            preview.innerText = t('messages.errorPrefix') + result.error;
             return;
           }
           if (action === 'insert') {
-            if (result && result.at === 'cursor') preview.innerText = "✅ 커서(선택) 위치에 삽입 및 저장 완료!";
-            else preview.innerText = "✅ 본문 맨 끝에 삽입 및 저장 완료. 문서 맨 아래를 확인하세요.";
+            if (result && result.at === 'cursor') preview.innerText = t('messages.insertAtCursor');
+            else preview.innerText = t('messages.insertAtEnd');
           } else {
-            preview.innerText = "✅ 저장 완료!";
+            preview.innerText = t('messages.saveDone');
           }
+          loadCitationList();
           if (isManual) {
             document.getElementById('title').value = "";
             document.getElementById('author').value = "";
@@ -504,7 +649,7 @@
           }
         }).withFailureHandler(function(err) {
           var msg = (err && (err.message || err.error || err)) || String(err);
-          preview.innerText = "❌ 오류(서버 연결): " + msg;
+          preview.innerText = t('messages.errorServer') + msg;
         });
         if (action === 'insert') runner.insertCitation(data);
         else runner.saveCitationOnly(data);
@@ -513,62 +658,64 @@
       function handleGenerate() {
         var preview = document.getElementById('preview');
         preview.className = '';
-        preview.innerText = "⏳ 목록 생성 중...";
+        preview.innerText = t('messages.generating');
         google.script.run.withSuccessHandler(function(result) {
           try { result = (typeof result === 'string') ? JSON.parse(result) : result; } catch (e) { result = {}; }
           if (result && result.ok && result.count > 0) {
             preview.className = '';
-            preview.innerText = "✅ 참고문헌 " + result.count + "개 생성 완료! (마지막 페이지)";
+            preview.innerText = formatMsg(t('messages.generateDone'), { count: result.count });
           } else if (result && result.error) {
             preview.className = 'preview-error';
-            preview.innerText = "❌ 오류: " + result.error;
+            preview.innerText = t('messages.errorPrefix') + result.error;
           } else if (result && result.message) {
             preview.className = '';
-            preview.innerText = "⚠️ " + result.message + " 먼저 '저장만 하기' 또는 '본문에 삽입 및 저장'으로 항목을 추가하세요.";
+            preview.innerText = formatMsg(t('messages.generateNoItems'), { message: result.message });
           } else {
             preview.className = '';
-            preview.innerText = "⚠️ 저장된 참고문헌이 없습니다. 먼저 항목을 추가하세요.";
+            preview.innerText = t('messages.generateNoData');
           }
         }).withFailureHandler(function(err) {
           var msg = (err && (err.message || err.error || err)) || String(err);
           preview.className = 'preview-error';
-          preview.innerText = "❌ 오류: " + msg;
+          preview.innerText = t('messages.errorPrefix') + msg;
         }).generateBibliography();
       }
 
       function handleClear() {
-        if (confirm("모든 데이터를 삭제하시겠습니까?")) {
+        if (confirm(t('alerts.confirmClear'))) {
           google.script.run.withSuccessHandler(function() {
-            alert("초기화되었습니다.");
-            document.getElementById('preview').innerText = "✅ 초기화 완료";
+            alert(t('alerts.cleared'));
+            document.getElementById('preview').innerText = t('messages.clearDone');
+            citationListData = [];
+            loadCitationList();
             scanData = null;
             document.getElementById('scanResults').style.display = 'none';
             document.getElementById('recommendedSection').innerHTML = '';
             document.getElementById('unverifiedSection').innerHTML = '';
           }).withFailureHandler(function(err) {
             var msg = (err && (err.message || err.error || err)) || String(err);
-            document.getElementById('preview').innerText = "❌ 오류: " + msg;
+            document.getElementById('preview').innerText = t('messages.errorPrefix') + msg;
           }).clearCitations();
         }
       }
 
       function handleScan() {
-        document.getElementById('preview').innerText = "⏳ 문서 스캔 중...";
+        document.getElementById('preview').innerText = t('messages.scanning');
         google.script.run.withSuccessHandler(function(result) {
           try { result = (typeof result === 'string') ? JSON.parse(result) : result; } catch (e) { result = {}; }
           if (result && result.error) {
-            document.getElementById('preview').innerText = "❌ 오류: " + result.error;
+            document.getElementById('preview').innerText = t('messages.errorPrefix') + result.error;
             return;
           }
           scanData = result;
           if (!result.dummies || result.dummies.length === 0) {
-            document.getElementById('preview').innerText = "⚠️ 감지된 임시 인용이 없습니다.";
+            document.getElementById('preview').innerText = t('messages.noDummies');
             document.getElementById('scanResults').style.display = 'none';
             return;
           }
           var opts = result.citationOptions || [];
           if (opts.length === 0) {
-            document.getElementById('preview').innerText = "⚠️ 저장된 문헌이 없습니다. 먼저 '직접 입력' 또는 '통째로 붙여넣기'로 문헌을 추가하세요.";
+            document.getElementById('preview').innerText = t('messages.noCitationsForScan');
             document.getElementById('scanResults').style.display = 'none';
             return;
           }
@@ -584,29 +731,30 @@
             var recIdx = d.recommendedIndex !== undefined ? d.recommendedIndex : (d.suggestedIndex !== undefined ? d.suggestedIndex : -1);
             var score = d.score !== undefined ? d.score : 0;
             var sel = '<select id="map_' + idx + '" class="citation-select">';
-            sel += '<option value="-1">대체하지 않음(Skip)</option>';
+            sel += '<option value="-1">' + t('ui.scan.skip') + '</option>';
             for (var j = 0; j < opts.length; j++) {
               var selected = (recIdx >= 0 && opts[j].index === recIdx) ? ' selected' : '';
               sel += '<option value="' + opts[j].index + '"' + selected + '>' + escapeHtml(opts[j].label || '') + '</option>';
             }
             sel += '</select>';
-            var warnTag = d.isUnverified ? '<span class="warn-tag">⚠ 문헌 연결 필요</span>' : '';
-            var scoreTag = (score > 0 && !d.isUnverified) ? ' <span class="score-tag">' + score + '점</span>' : '';
-            return '<div class="dummy-item" data-index="' + idx + '"><div class="dummy-text">' + escapeHtml(d.text) + scoreTag + warnTag + '</div>' + sel + '</div>';
+            var warnTag = d.isUnverified ? '<span class="warn-tag">' + t('ui.scan.needLink') + '</span>' : '';
+            var scoreTag = (score > 0 && !d.isUnverified) ? ' <span class="score-tag">' + score + t('ui.scan.points') + '</span>' : '';
+            var cb = '<input type="checkbox" class="dummy-include" id="include_' + idx + '" checked>';
+            return '<div class="dummy-item" data-index="' + idx + '">' + cb + '<div class="dummy-text">' + escapeHtml(d.text) + scoreTag + warnTag + '</div>' + sel + '</div>';
           };
-          var recHtml = recommended.length > 0 ? '<div class="section-title">추천된 항목 (' + recommended.length + ')</div><div class="scan-list-box">' + recommended.map(function(d) { return makeItemHtml(d, d._idx); }).join('') + '</div>' : '';
-          var unvHtml = unverified.length > 0 ? '<div class="section-title">미확인 항목 (' + unverified.length + ')</div><div class="scan-list-box section-unverified">' + unverified.map(function(d) { return makeItemHtml(d, d._idx); }).join('') + '</div>' : '';
+          var recHtml = recommended.length > 0 ? '<div class="section-title">' + t('ui.scan.recommended') + ' (' + recommended.length + ')</div><div class="scan-list-box">' + recommended.map(function(d) { return makeItemHtml(d, d._idx); }).join('') + '</div>' : '';
+          var unvHtml = unverified.length > 0 ? '<div class="section-title">' + t('ui.scan.unverified') + ' (' + unverified.length + ')</div><div class="scan-list-box section-unverified">' + unverified.map(function(d) { return makeItemHtml(d, d._idx); }).join('') + '</div>' : '';
           document.getElementById('recommendedSection').innerHTML = recHtml;
           document.getElementById('unverifiedSection').innerHTML = unvHtml;
           document.getElementById('scanResults').style.display = 'block';
-          var msg = "✅ " + result.dummies.length + "개 인용 후보 감지됨";
-          if (recommended.length > 0 && unverified.length > 0) msg += " (추천 " + recommended.length + " / 미확인 " + unverified.length + ")";
-          else if (unverified.length > 0) msg += ". 미확인 항목에 문헌을 연결해 주세요.";
-          else msg += ". 문헌을 선택하고 '매핑 적용'을 누르세요.";
+          var msg = formatMsg(t('messages.scanDone'), { count: result.dummies.length });
+          if (recommended.length > 0 && unverified.length > 0) msg += formatMsg(t('messages.scanWithSections'), { rec: recommended.length, unv: unverified.length });
+          else if (unverified.length > 0) msg += t('messages.scanUnverifiedHint');
+          else msg += t('messages.scanSelectHint');
           document.getElementById('preview').innerText = msg;
         }).withFailureHandler(function(err) {
           var msg = (err && (err.message || err.error || err)) || String(err);
-          document.getElementById('preview').innerText = "❌ 오류: " + msg;
+          document.getElementById('preview').innerText = t('messages.errorPrefix') + msg;
         }).scanDummyCitations();
       }
 
@@ -618,38 +766,97 @@
       }
 
       function handleApplyMapping() {
-        if (!scanData || !scanData.dummies || scanData.dummies.length === 0) {
-          document.getElementById('preview').innerText = "⚠️ 먼저 '문서 스캔'을 실행하세요.";
-          return;
-        }
-        var mappings = [];
-        for (var i = 0; i < scanData.dummies.length; i++) {
-          var sel = document.getElementById('map_' + i);
-          if (!sel) continue;
-          var val = sel.value;
-          if (val === '-1' || val === 'SKIP') continue;
-          var idx = parseInt(val, 10);
-          if (isNaN(idx) || idx < 0) continue;
-          mappings.push({ dummyText: scanData.dummies[i].text, citationIndex: idx });
-        }
-        if (mappings.length === 0) {
-          document.getElementById('preview').innerText = "⚠️ 매핑할 항목을 선택해 주세요.";
-          return;
-        }
-        document.getElementById('preview').innerText = "⏳ 치환 적용 중...";
-        google.script.run.withSuccessHandler(function(result) {
-          try { result = (typeof result === 'string') ? JSON.parse(result) : result; } catch (e) { result = {}; }
-          if (result && result.error) {
-            document.getElementById('preview').innerText = "❌ 오류: " + result.error;
+        var preview = document.getElementById('preview');
+        try {
+          if (!scanData || !scanData.dummies || scanData.dummies.length === 0) {
+            preview.innerText = t('messages.mappingApplyFirst');
             return;
           }
-          document.getElementById('preview').innerText = "✅ " + (result.replaced || 0) + "개 치환 완료! 참고문헌 목록 생성 시 반영됩니다.";
-          document.getElementById('scanResults').style.display = 'none';
-          scanData = null;
-        }).withFailureHandler(function(err) {
-          var msg = (err && (err.message || err.error || err)) || String(err);
-          document.getElementById('preview').innerText = "❌ 오류: " + msg;
-        }).applyMapping(mappings);
+          var mappings = [];
+          for (var i = 0; i < scanData.dummies.length; i++) {
+            var includeCb = document.getElementById('include_' + i);
+            if (includeCb && !includeCb.checked) continue;
+            var sel = document.getElementById('map_' + i);
+            if (!sel) continue;
+            var val = sel.value;
+            if (val === '-1' || val === 'SKIP') continue;
+            var idx = parseInt(val, 10);
+            if (isNaN(idx) || idx < 0 || idx >= citationListData.length) continue;
+            mappings.push({ dummyText: scanData.dummies[i].text, realData: citationListData[idx] });
+          }
+          if (mappings.length === 0) {
+            preview.innerText = t('messages.mappingSelectItems');
+            return;
+          }
+          preview.innerText = t('messages.applying');
+          google.script.run
+            .withSuccessHandler(function(result) {
+              try {
+                result = (typeof result === 'string') ? JSON.parse(result) : result;
+              } catch (e) {
+                result = {};
+              }
+              if (result && result.error) {
+                preview.innerText = t('messages.errorPrefix') + result.error;
+                return;
+              }
+              var count = (result && result.replaced != null) ? result.replaced : 0;
+              preview.innerText = formatMsg(t('messages.mappingDone'), { count: count });
+              document.getElementById('scanResults').style.display = 'none';
+              scanData = null;
+            })
+            .withFailureHandler(function(err) {
+              var msg = (err && (err.message || err.error || err)) || String(err);
+              preview.innerText = t('messages.errorPrefix') + (msg || t('errors.operationFailed'));
+            })
+            .applyMapping(mappings);
+        } catch (e) {
+          var msg = (e && e.message) ? e.message : String(e);
+          preview.innerText = t('messages.errorPrefix') + msg;
+        }
+      }
+
+      function handleFinalize() {
+        var preview = document.getElementById('preview');
+        preview.innerText = t('messages.finalizing');
+        google.script.run
+          .withSuccessHandler(function(count) {
+            var msg = formatMsg(t('messages.finalizeDone'), { count: count != null ? count : 0 });
+            preview.innerText = msg;
+            alert(msg);
+          })
+          .withFailureHandler(function(err) {
+            var msg = (err && (err.message || err.error || err)) || String(err);
+            preview.innerText = t('messages.errorPrefix') + msg;
+            alert(t('messages.errorPrefix') + msg);
+          })
+          .finalizeCitations();
+      }
+
+      function handleSort() {
+        var preview = document.getElementById('preview');
+        preview.className = '';
+        preview.innerText = t('messages.sorting');
+        google.script.run
+          .withSuccessHandler(function(result) {
+            try { result = (typeof result === 'string') ? JSON.parse(result) : result; } catch (e) { result = {}; }
+            if (result && result.ok) {
+              var msg = (result.message != null && result.message !== '') ? result.message : t('messages.sortDone');
+              preview.innerText = msg;
+              alert(msg);
+            } else {
+              preview.className = 'preview-error';
+              preview.innerText = result && result.error ? (t('messages.errorPrefix') + result.error) : t('messages.errorPrefix') + 'Unknown error';
+              alert(preview.innerText);
+            }
+          })
+          .withFailureHandler(function(err) {
+            var msg = (err && (err.message || err.error || err)) || String(err);
+            preview.className = 'preview-error';
+            preview.innerText = t('messages.errorPrefix') + msg;
+            alert(preview.innerText);
+          })
+          .sortAndFormatBibliography();
       }
     </script>
   </body>

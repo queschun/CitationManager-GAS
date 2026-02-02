@@ -1,3 +1,4 @@
 # .gitignore 파일 내용
 .clasp.json
 node_modules/
+*.log
