@@ -41,47 +41,87 @@ var STYLE_PRESETS = {
     usePagePrefix: true,
     korUsePagePrefix: false,
     bibliographyUseEtAl: false
+  },
+  KCI: {
+    italicsTitle: true,
+    italicsJournal: true,
+    yearBracket: '()',
+    authorSeparator: ', ',
+    etAlThreshold: 3,
+    etAlEn: 'et al.',
+    etAlKo: '외',
+    headerFontSize: 14,
+    headerAlignment: 'CENTER',
+    lineSpacing: 12,
+    hangingIndent: 20,
+    indentFirstLine: 0,
+    korItalicsJournal: false,
+    usePagePrefix: true,
+    korUsePagePrefix: false,
+    bibliographyUseEtAl: false
   }
 };
 
-/** 현재 문서에 적용된 STYLE_CONFIG 객체 반환 (저장값 없으면 APA 프리셋) */
+/** DocumentProperties: 인용 스타일(APA/MLA/KCI) 저장·조회. 문서별로 저장되어 다른 문서에 영향 없음. */
+function getStyleSetting() {
+  var style = PropertiesService.getDocumentProperties().getProperty('CITATION_STYLE');
+  return (style === 'APA' || style === 'MLA' || style === 'KCI') ? style : 'APA';
+}
+function saveStyleSetting(style) {
+  if (style !== 'APA' && style !== 'MLA' && style !== 'KCI') style = 'APA';
+  PropertiesService.getDocumentProperties().setProperty('CITATION_STYLE', style);
+}
+
+/** 현재 문서에 적용된 통합 설정 반환. 인용스타일 기본값 + 스타일 세부설정(Override) 병합. */
 function getEffectiveConfig() {
   var props = PropertiesService.getDocumentProperties();
+  var citationStyle = (props.getProperty('CITATION_STYLE') === 'APA' || props.getProperty('CITATION_STYLE') === 'MLA' || props.getProperty('CITATION_STYLE') === 'KCI')
+    ? props.getProperty('CITATION_STYLE') : 'APA';
+  var base = STYLE_PRESETS[citationStyle] ? Object.assign({}, STYLE_PRESETS[citationStyle]) : Object.assign({}, STYLE_PRESETS.APA);
   var saved = props.getProperty('STYLE_CONFIG');
-  if (!saved) return Object.assign({}, STYLE_PRESETS.APA);
+  if (!saved) return base;
   try {
     var parsed = JSON.parse(saved);
-    var base = parsed.preset && STYLE_PRESETS[parsed.preset] ? STYLE_PRESETS[parsed.preset] : STYLE_PRESETS.APA;
-    return Object.assign({}, base, parsed.config || {});
+    var overrides = parsed.overrides && typeof parsed.overrides === 'object' ? parsed.overrides : {};
+    return Object.assign({}, base, overrides);
   } catch (e) {
-    return Object.assign({}, STYLE_PRESETS.APA);
+    return base;
   }
 }
 
+/** 사이드바용: 현재 인용스타일, 통합 설정(effective), 오버라이드 객체 반환. */
 function getStyleConfig() {
   try {
     var props = PropertiesService.getDocumentProperties();
+    var citationStyle = (props.getProperty('CITATION_STYLE') === 'APA' || props.getProperty('CITATION_STYLE') === 'MLA' || props.getProperty('CITATION_STYLE') === 'KCI')
+      ? props.getProperty('CITATION_STYLE') : 'APA';
+    var base = STYLE_PRESETS[citationStyle] ? Object.assign({}, STYLE_PRESETS[citationStyle]) : Object.assign({}, STYLE_PRESETS.APA);
     var saved = props.getProperty('STYLE_CONFIG');
-    if (!saved) return JSON.stringify({ ok: true, config: STYLE_PRESETS.APA, preset: 'APA' });
-    var parsed = JSON.parse(saved);
-    var base = (parsed.preset && STYLE_PRESETS[parsed.preset]) ? STYLE_PRESETS[parsed.preset] : STYLE_PRESETS.APA;
-    var config = Object.assign({}, base, parsed.config || {});
-    return JSON.stringify({ ok: true, config: config, preset: parsed.preset || 'APA' });
+    var overrides = {};
+    if (saved) {
+      try {
+        var parsed = JSON.parse(saved);
+        overrides = parsed.overrides && typeof parsed.overrides === 'object' ? parsed.overrides : {};
+      } catch (e) {}
+    }
+    var config = Object.assign({}, base, overrides);
+    return JSON.stringify({ ok: true, citationStyle: citationStyle, config: config, overrides: overrides });
   } catch (e) {
-    return JSON.stringify({ ok: true, config: STYLE_PRESETS.APA, preset: 'APA' });
+    return JSON.stringify({ ok: true, citationStyle: 'APA', config: STYLE_PRESETS.APA, overrides: {} });
   }
 }
 
+/** 스타일 세부설정(오버라이드) 저장. citationStyle 변경 시에도 저장 가능. DocumentProperties에만 저장. */
 function saveStyleConfig(configObj) {
   var L = getLanguagePack();
   try {
     var props = PropertiesService.getDocumentProperties();
-    var cfg = configObj.config || configObj;
-    var preset = configObj.preset || 'Custom';
-    if (preset === 'APA' || preset === 'MLA') {
-      cfg = Object.assign({}, STYLE_PRESETS[preset], cfg);
+    if (configObj.citationStyle === 'APA' || configObj.citationStyle === 'MLA' || configObj.citationStyle === 'KCI') {
+      props.setProperty('CITATION_STYLE', configObj.citationStyle);
     }
-    props.setProperty('STYLE_CONFIG', JSON.stringify({ config: cfg, preset: preset }));
+    var overrides = configObj.overrides != null ? configObj.overrides : (configObj.config || configObj);
+    if (typeof overrides !== 'object') overrides = {};
+    props.setProperty('STYLE_CONFIG', JSON.stringify({ overrides: overrides }));
     return JSON.stringify({ ok: true });
   } catch (e) {
     var detail = (e && e.message) ? e.message : String(e);
@@ -92,6 +132,19 @@ function saveStyleConfig(configObj) {
 function isKoreanCitation(authorStr) {
   if (!authorStr || typeof authorStr !== 'string') return false;
   return /[\uac00-\ud7a3\u4e00-\u9fff]/.test(authorStr);
+}
+
+/**
+ * [Patch] APA 연도 오염 방지: secondVal/year 필드에서 연도(19xx/20xx)만 추출.
+ * 저자명·페이지 등이 연도 자리에 들어가는 것을 막기 위해 엄격한 검증만 허용.
+ */
+function strictYearFromItem(item) {
+  if (!item || typeof item !== 'object') return '';
+  var raw = (item.secondVal != null ? item.secondVal : item.year || '').toString().trim();
+  if (!raw) return '';
+  if (/^(19|20)\d{2}$/.test(raw)) return raw;
+  var extracted = raw.match(/(19|20)\d{2}/);
+  return extracted ? extracted[0] : '';
 }
 
 /** 문장 내 인용(In-text)용 저자 포맷: 국문은 '외', 영문은 2인 '성 & 성', 3인 이상 '첫 저자 성 et al.' 강제 */
@@ -150,6 +203,99 @@ function formatAuthorsForInText(authorStr, isKo) {
 /** 사이드바용: 문장 내 인용 문자열 반환 (국문=외, 영문=et al.) */
 function getInTextCitationString(authorRaw, year, style) {
   return formatInTextCitation(authorRaw || '', year || '', style || 'APA');
+}
+
+/**
+ * 스타일별 문장 내 인용 문자열 생성 (Style Toggle용).
+ * APA: (저자1 & 저자2, 연도). MLA: 연도·쉼표 무조건 제거. 페이지 있으면 (저자 쪽수) 예 (백승익 110), 없으면 (저자) 예 (백승익).
+ * KCI: (저자1·저자2, 연도).
+ */
+function getFormattedCitation(item, style) {
+  if (!item || typeof item !== 'object') return '';
+  if (item.mode === 'paste') return (item.shortText || item.fullText || '').trim() || '';
+  var s = (style || getStyleSetting()).toUpperCase();
+  var year = strictYearFromItem(item);
+  var page = (item.page || '').toString().trim();
+  var authorRaw = (item.authorRaw || item.author || '').trim();
+  var isKo = isKoreanCitation(authorRaw);
+  var parts = smartSplitAuthors(authorRaw, isKo);
+
+  function surname(name, ko) {
+    var p = (name || '').trim();
+    if (ko) return p;
+    var comma = p.indexOf(',');
+    if (comma >= 0) return p.substring(0, comma).trim();
+    var sp = p.split(' ');
+    return sp[sp.length - 1] || p;
+  }
+
+  var authorInText = '';
+  if (s === 'APA') {
+    if (parts.length >= 3) authorInText = surname(parts[0], isKo) + ' et al.';
+    else if (parts.length === 2) authorInText = surname(parts[0], isKo) + ' & ' + surname(parts[1], isKo);
+    else if (parts.length === 1) authorInText = surname(parts[0], isKo);
+    else authorInText = 'Unknown';
+    return '(' + authorInText + ', ' + year + ')';
+  }
+  // [Patch] James Ghost Fix / MLA 검증: page 없으면 (Author)만 출력, 콤마·공백 없음
+  if (s === 'MLA') {
+    if (parts.length >= 3) authorInText = surname(parts[0], isKo) + ' et al.';
+    else if (parts.length === 2) authorInText = surname(parts[0], isKo) + ' and ' + surname(parts[1], isKo);
+    else if (parts.length === 1) authorInText = surname(parts[0], isKo);
+    else authorInText = 'Unknown';
+    if (page) return '(' + authorInText + ' ' + page + ')';
+    return '(' + authorInText + ')';
+  }
+  if (s === 'KCI') {
+    if (parts.length >= 3) authorInText = parts[0] + ' 외';
+    else if (parts.length === 2) authorInText = parts[0] + '·' + parts[1];
+    else if (parts.length === 1) authorInText = parts[0];
+    else authorInText = 'Unknown';
+    return '(' + authorInText + ', ' + year + ')';
+  }
+  return '(' + (authorRaw || 'Unknown') + ', ' + year + ')';
+}
+
+/**
+ * 스타일별 참고문헌 한 항목 문자열. 여러 저자 시 APA &, MLA and, KCI 및 로 마지막 저자 연결.
+ */
+function getFormattedBibliography(item, style) {
+  if (!item || typeof item !== 'object') return '';
+  if (item.mode === 'paste') return (item.fullText || '').trim();
+  var s = (style || getStyleSetting()).toUpperCase();
+  var authorRaw = (item.authorRaw || item.author || '').trim();
+  var parts = authorRaw.indexOf(';') >= 0
+    ? authorRaw.split(';').map(function(x) { return x.trim(); }).filter(Boolean)
+    : authorRaw.split(',').map(function(x) { return x.trim(); }).filter(Boolean);
+  if (parts.length === 0) parts = [authorRaw || 'Unknown'];
+  var lastConn = s === 'APA' ? ' & ' : s === 'MLA' ? ' and ' : ' 및 ';
+  var authorStr = parts.length === 1 ? parts[0] : parts.slice(0, -1).join(', ') + lastConn + parts[parts.length - 1];
+  var year = (item.secondVal != null ? item.secondVal : item.year || '').toString().trim();
+  var title = (item.title || '').trim();
+  var pub = (item.publisher || '').trim();
+  var vol = (item.volume || '').trim();
+  var issue = (item.issue || '').trim();
+  var page = (item.page || '').trim();
+  // [Patch] MLA 참고문헌: page 없을 때 pp. 접두사·쉼표 미출력
+  if (s === 'MLA') {
+    var mla = authorStr + '. "' + title + '." ';
+    if (pub) mla += pub + ', ';
+    if (vol) mla += 'vol. ' + vol + (issue ? ', no. ' + issue : '') + (page ? ', pp. ' + page : '') + '. ';
+    else if (issue) mla += 'no. ' + issue + (page ? ', pp. ' + page : '') + '. ';
+    else if (page) mla += 'pp. ' + page + '. ';
+    mla += year + '.';
+    return mla;
+  }
+  if (s === 'KCI') {
+    var kci = authorStr + ' (' + year + '). ' + title + '.';
+    if (pub) kci += ' ' + pub + '.';
+    if (vol || issue || page) kci += ' ' + [vol, issue, page].filter(Boolean).join(', ') + '.';
+    return kci;
+  }
+  var apa = authorStr + ' (' + year + '). ' + title + '.';
+  if (pub) apa += ' ' + pub + (vol || issue || page ? ', ' + (vol || '') + (issue ? '(' + issue + ')' : '') + (page ? ', ' + page : '') + '.' : '.');
+  else if (vol || issue || page) apa += ' ' + (vol || '') + (issue ? '(' + issue + ')' : '') + (page ? ', ' + page : '') + '.';
+  return apa;
 }
 
 /**
@@ -213,38 +359,41 @@ function parseAndSuggestCitation(fullText) {
 }
 
 /**
- * 참고문헌용 저자 리스트 생성: 저자 생략 금지, 마지막 저자 앞 & 필수, 클렌징 적용.
- * CITATION_LIST에 저자가 긴 문자열 하나로 저장돼 있어도 쉼표로 분리 후 재조립.
+ * 참고문헌용 저자 리스트 생성: 저자 생략 금지, 마지막 저자 앞 연결자(APA &, MLA and, KCI 및) 적용.
  * @param {string} authorStr - 저자 문자열 (세미콜론 또는 쉼표 구분)
- * @return {string} "저자1, 저자2, & 저자3" 형태 (전원 포함, 생략 없음)
+ * @param {string} [style] - CITATION_STYLE (APA/MLA/KCI). 없으면 getStyleSetting() 사용
+ * @return {string} "저자1, 저자2, & 저자3" 등 (전원 포함, 생략 없음)
  */
-function formatAuthorListForBibliography(authorStr) {
+function formatAuthorListForBibliography(authorStr, style) {
   if (authorStr == null || typeof authorStr !== 'string') return 'Unknown';
   var raw = String(authorStr).trim();
   if (!raw) return 'Unknown';
+  var s = (style || getStyleSetting()).toUpperCase();
+  var lastConn = s === 'MLA' ? ', and ' : s === 'KCI' ? ', 및 ' : ', & ';
   var parts;
   if (raw.indexOf(';') >= 0) {
     parts = raw.split(';');
   } else {
     parts = raw.split(',');
   }
-  parts = parts.map(function(s) {
-    return s.replace(/\s+/g, ' ').replace(/^[\s,]+|[\s,]+$/g, '').trim();
-  }).filter(function(s) { return s.length > 0; });
+  parts = parts.map(function(p) {
+    return p.replace(/\s+/g, ' ').replace(/^[\s,]+|[\s,]+$/g, '').trim();
+  }).filter(function(p) { return p.length > 0; });
   if (parts.length === 0) return 'Unknown';
   if (parts.length === 1) return parts[0];
-  return parts.slice(0, -1).join(', ') + ', & ' + parts[parts.length - 1];
+  return parts.slice(0, -1).join(', ') + lastConn + parts[parts.length - 1];
 }
 
 /**
  * 저자 문자열을 STYLE_CONFIG에 따라 포맷.
- * 참고문헌(isBibliography)일 때: formatAuthorListForBibliography로 전원 포함·마지막 앞 & 고정·생략 금지.
+ * 참고문헌(isBibliography)일 때: formatAuthorListForBibliography로 전원 포함·스타일별 연결자(&/and/및)·생략 금지.
  * 본문 인용일 때: 기존 etAlThreshold/et al.·외 로직 유지.
  */
 function formatAuthorsWithConfig(authorStr, cfg, isKo, isBibliography) {
   if (!authorStr) return 'Unknown';
   if (isBibliography) {
-    return formatAuthorListForBibliography(authorStr);
+    var style = (cfg && cfg.citationStyle) || getStyleSetting();
+    return formatAuthorListForBibliography(authorStr, style);
   }
   var parts = authorStr.split(';').map(function(s) { return s.trim(); }).filter(function(s) { return s; });
   if (parts.length === 0) return 'Unknown';
@@ -261,25 +410,26 @@ function formatAuthorsWithConfig(authorStr, cfg, isKo, isBibliography) {
  * @return {{ text: string, ranges: Array<{ start: number, end: number, format: string }> }}
  */
 function formatCitationEntry(item, cfg) {
-  if (!item) return { text: '', ranges: [] };
+  if (!item || typeof item !== 'object') return { text: '', ranges: [] };
   cfg = cfg || getEffectiveConfig();
   var ranges = [];
 
   if (item.mode === 'paste') {
-    return { text: (item.fullText || '').trim(), ranges: [] };
+    return { text: (item.fullText || '').toString().trim(), ranges: [] };
   }
 
-  var authorRaw = (item.authorRaw || item.author || '').trim();
+  // [Patch] James Ghost Fix: 데이터 소스(item) 속성을 확실히 문자열로 초기화하여 undefined/이전 잔재 방지
+  var authorRaw = (item.authorRaw != null ? item.authorRaw : item.author || '').toString().trim();
   var isKo = isKoreanCitation(authorRaw);
   var author = formatAuthorsWithConfig(authorRaw, cfg, isKo, true);
 
-  var title = (item.title || '').trim();
-  var year = (item.secondVal || '').trim();
-  var publisher = (item.publisher || '').trim();
-  var volume = (item.volume || '').trim();
-  var issue = (item.issue || '').trim();
-  var page = (item.page || '').trim();
-  var styleName = (item.style || 'APA').toUpperCase();
+  var title = (item.title || '').toString().trim();
+  var year = strictYearFromItem(item);
+  var publisher = (item.publisher || '').toString().trim();
+  var volume = (item.volume || '').toString().trim();
+  var issue = (item.issue || '').toString().trim();
+  var page = (item.page || '').toString().trim();
+  var styleName = ((item.style != null ? item.style : 'APA') + '').trim().toUpperCase();
 
   var italicsTitle = cfg.italicsTitle === true;
   var italicsJournal = cfg.italicsJournal === true;
@@ -295,6 +445,7 @@ function formatCitationEntry(item, cfg) {
   else if (year) yearPart = ' ' + year;
 
   var fullText = '';
+  // [Patch] MLA 참고문헌: page 없을 때 pp. 접두사·쉼표 미출력 (page 있을 때만 pagePrefix+page 추가)
   if (styleName === 'MLA') {
     fullText = author + '. "' + title + '." ';
     var mlaTitleStart = author.length + 3;
@@ -349,6 +500,45 @@ function formatCitationEntry(item, cfg) {
   return { text: fullText.trim(), ranges: ranges };
 }
 
+/**
+ * MLA 스타일 + 페이지 번호 없는 문헌 시뮬레이션.
+ * 본문 인용 (Author)만 출력, 참고문헌에 pp. 미출력 여부를 검증합니다.
+ * Apps Script 편집기에서 Run > testMlaNoPageSimulation 실행 후 로그 확인.
+ */
+function testMlaNoPageSimulation() {
+  var item = {
+    mode: 'manual',
+    author: 'Smith, John',
+    authorRaw: 'Smith, John',
+    secondVal: '2020',
+    year: '2020',
+    title: 'Testing Without Pages',
+    publisher: 'Test Press',
+    page: '',
+    style: 'MLA'
+  };
+  var inText = getFormattedCitation(item, 'MLA');
+  var cfg = getEffectiveConfig();
+  cfg.citationStyle = 'MLA';
+  var bibResult = formatCitationEntry(item, cfg);
+  var bibSimple = getFormattedBibliography(item, 'MLA');
+  var report = {
+    scenario: 'MLA, no page',
+    inTextCitation: inText,
+    bibliographyEntry: bibResult.text,
+    bibliographySimple: bibSimple,
+    checks: {
+      inTextIsAuthorOnly: inText === '(Smith)',
+      bibliographyHasNoPp: bibResult.text.indexOf('pp.') === -1,
+      bibliographySimpleHasNoPp: bibSimple.indexOf('pp.') === -1
+    }
+  };
+  if (typeof Logger !== 'undefined') {
+    Logger.log(JSON.stringify(report, null, 2));
+  }
+  return JSON.stringify(report, null, 2);
+}
+
 function onOpen() {
   var L = getLanguagePack();
   DocumentApp.getUi().createMenu(L.ui.menu.title)
@@ -374,11 +564,10 @@ function saveCitationOnly(data) {
     const props = PropertiesService.getDocumentProperties();
     if (data.korUsePagePrefix !== undefined) {
       var saved = props.getProperty('STYLE_CONFIG');
-      var preset = 'APA';
-      if (saved) try { var p = JSON.parse(saved); preset = p.preset || 'APA'; } catch (e) {}
-      var cfg = getEffectiveConfig();
-      cfg.korUsePagePrefix = data.korUsePagePrefix === true;
-      saveStyleConfig({ config: cfg, preset: preset });
+      var overrides = {};
+      if (saved) try { var p = JSON.parse(saved); overrides = p.overrides && typeof p.overrides === 'object' ? p.overrides : {}; } catch (e) {}
+      overrides.korUsePagePrefix = data.korUsePagePrefix === true;
+      saveStyleConfig({ overrides: overrides });
       delete data.korUsePagePrefix;
     }
     let citationList = [];
@@ -486,17 +675,18 @@ function deduplicateCitations(citationArray) {
 }
 
 /**
- * 인용구 알맹이 추출: 괄호 ((, ), [, ]) 모두 제거, 양 끝 공백 제거 후 순수 "저자, 연도"만 반환.
+ * 인용구 알맹이 추출: 괄호 제거 후 "저자, 연도" 등 반환. 문헌 객체일 때는 현재 CITATION_STYLE 반영.
  * @param {string|Object} citationData - 인용 문자열 또는 문헌 객체
+ * @param {string} [style] - CITATION_STYLE. 없으면 getStyleSetting() 사용
  * @return {string} "저자, 연도" 형태 (괄호 없음)
  */
-function getCleanText(citationData) {
+function getCleanText(citationData, style) {
   if (citationData == null) return '';
   var text = '';
   if (typeof citationData === 'string') {
     text = String(citationData);
   } else if (typeof citationData === 'object') {
-    text = citationData.shortCitation || getShortCitationPart(citationData) || '';
+    text = citationData.shortCitation || getShortCitationPart(citationData, style) || '';
   }
   return String(text).replace(/[()\[\]]/g, '').trim();
 }
@@ -530,18 +720,20 @@ function cleanCitationFormat(str) {
 
 /**
  * 문헌 한 건에서 Short Citation(저자, 연도) 부분만 추출. 괄호 없이 "저자, 연도" 문자열 반환.
+ * UserProperties의 CITATION_STYLE을 반영(MLA면 "저자 연도" 등).
  * @param {Object} item - 문헌 객체 (mode: 'manual' | 'paste')
- * @return {string} "저자, 연도" 형식
+ * @param {string} [style] - CITATION_STYLE. 없으면 getStyleSetting() 사용
+ * @return {string} "저자, 연도" 또는 "저자 연도" 형식
  */
-function getShortCitationPart(item) {
+function getShortCitationPart(item, style) {
   if (!item) return '';
+  var s = (style || getStyleSetting()).toUpperCase();
   if (item.mode === 'manual') {
     var authorRaw = (item.authorRaw || item.author || '').trim();
     var year = (item.secondVal || '').trim();
-    var style = (item.style || 'APA').toUpperCase();
     var isKo = isKoreanCitation(authorRaw);
     var author = formatAuthorsForInText(authorRaw, isKo);
-    return style === 'APA' ? author + ', ' + year : author + ' ' + year;
+    return s === 'APA' || s === 'KCI' ? author + ', ' + year : author + ' ' + year;
   }
   var shortText = (item.shortText || '').trim();
   if (shortText) {
@@ -564,17 +756,20 @@ function getShortCitationPart(item) {
 }
 
 /**
- * 다중 인용 및 DB 중복 방지 통합 함수
+ * 다중 인용 및 DB 중복 방지 통합 함수. UserProperties CITATION_STYLE을 먼저 읽어 현재 스타일로 삽입.
  */
 function insertMultiCitation(citationArray) {
   if (!citationArray || citationArray.length === 0) return;
 
-  // 1. 중복 데이터 제거 (입력 배열 내 중복)
-  const uniqueItems = deduplicateCitations(citationArray);
+  var currentStyle = getStyleSetting();
 
-  // 2. 알맹이 추출 (getCleanText: 괄호 제거·양끝 공백 제거 → "저자, 연도"만)
+  // 1. 중복 데이터 제거 (입력 배열 내 중복)
+  var uniqueItems = deduplicateCitations(citationArray);
+
+  // 2. 현재 스타일로 각 문헌 인용 문자열 생성 후 괄호 제거하여 알맹이만 추출
   var cleanedParts = uniqueItems.map(function(item) {
-    return getCleanText(item);
+    var formatted = getFormattedCitation(item, currentStyle);
+    return formatted ? String(formatted).replace(/^[(\[]|[)\]]$/g, '').trim() : '';
   }).filter(function(s) { return s.length > 0; });
 
   if (cleanedParts.length === 0) return;
@@ -710,7 +905,7 @@ function generateBibliography() {
       }
     }
 
-    // 1. 기존 참고문헌 구역 삭제 (위 조건에 해당하지 않는 경우만 여기 도달)
+    // 1. 기존 참고문헌 구역 삭제: 마지막 단락은 제거하지 않고, 참고문헌 이후 요소만 제거 (오류 방지)
     var searchIndex = -1;
     for (var i = 0; i < numChildren; i++) {
       var child = body.getChild(i);
@@ -721,7 +916,18 @@ function generateBibliography() {
     }
     if (searchIndex !== -1) {
       if (searchIndex > 0 && body.getChild(searchIndex - 1).getType() === DocumentApp.ElementType.PAGE_BREAK) searchIndex--;
-      for (var j = body.getNumChildren() - 1; j >= searchIndex; j--) body.removeChild(body.getChild(j));
+      // 참고문헌 단락은 남기고, 그 뒤 요소만 끝에서부터 제거 (마지막 단락 제거 시 오류 방지)
+      while (body.getNumChildren() > searchIndex + 1) {
+        try {
+          body.removeChild(body.getChild(body.getNumChildren() - 1));
+        } catch (err) {
+          var lastIdx = body.getNumChildren() - 1;
+          if (lastIdx > searchIndex && body.getChild(lastIdx).getType() === DocumentApp.ElementType.PARAGRAPH) {
+            body.getChild(lastIdx).asParagraph().clear().appendText(' ');
+          }
+          break;
+        }
+      }
     }
 
     // 2. 데이터 불러오기 및 정렬
@@ -745,8 +951,10 @@ function generateBibliography() {
     const uniqueCitations = Array.from(uniqueMap.values());
     uniqueCitations.sort(function(a, b) { return (a.author || a.fullText || '').localeCompare(b.author || b.fullText || ''); });
 
-    // 3. 목록 작성 (서식 엔진 적용)
+    // 3. 목록 작성 (서식 엔진 적용, 현재 CITATION_STYLE 반영)
+    var currentStyle = getStyleSetting();
     var cfg = getEffectiveConfig();
+    cfg.citationStyle = currentStyle;
     var headerAlign = cfg.headerAlignment === 'LEFT' ? DocumentApp.HorizontalAlignment.LEFT
       : cfg.headerAlignment === 'RIGHT' ? DocumentApp.HorizontalAlignment.RIGHT
       : DocumentApp.HorizontalAlignment.CENTER;
@@ -754,10 +962,18 @@ function generateBibliography() {
     var firstLineIndent = parseInt(cfg.indentFirstLine, 10) || 0;
     var lineSp = parseInt(cfg.lineSpacing, 10) || 12;
 
-    body.appendPageBreak();
-    var header = body.appendParagraph('참고문헌');
-    header.setHeading(DocumentApp.ParagraphHeading.HEADING1).setAlignment(headerAlign);
-    if (cfg.headerFontSize) header.editAsText().setFontSize(0, header.getText().length - 1, cfg.headerFontSize);
+    // 참고문헌 구역을 유지한 경우: 해당 단락 앞에 페이지 나눔 삽입 후, 단락 내용을 '참고문헌'으로 유지
+    var refPara = (searchIndex >= 0 && body.getNumChildren() > searchIndex) ? body.getChild(searchIndex).asParagraph() : null;
+    if (refPara) {
+      body.insertPageBreak(searchIndex);
+      refPara.setText('참고문헌').setHeading(DocumentApp.ParagraphHeading.HEADING1).setAlignment(headerAlign);
+      if (cfg.headerFontSize) refPara.editAsText().setFontSize(0, refPara.getText().length - 1, cfg.headerFontSize);
+    } else {
+      body.appendPageBreak();
+      var header = body.appendParagraph('참고문헌');
+      header.setHeading(DocumentApp.ParagraphHeading.HEADING1).setAlignment(headerAlign);
+      if (cfg.headerFontSize) header.editAsText().setFontSize(0, header.getText().length - 1, cfg.headerFontSize);
+    }
 
     var added = 0;
     uniqueCitations.forEach(function(item) {
@@ -1090,9 +1306,45 @@ function extractSurname(authorStr) {
 }
 
 /**
+ * 문서 내 텍스트 요소(단락·목록·표 셀)를 문서 순서로 수집해 인덱스 맵 반환.
+ * @return {{ list: Array, elementToIndex: Object }}
+ */
+function collectBodyTextElements(body) {
+  var list = [];
+  var elementToIndex = {};
+  var numChildren = body.getNumChildren();
+  for (var i = 0; i < numChildren; i++) {
+    var child = body.getChild(i);
+    var type = child.getType();
+    if (type === DocumentApp.ElementType.PARAGRAPH || type === DocumentApp.ElementType.LIST_ITEM) {
+      elementToIndex[child] = list.length;
+      list.push(child);
+    } else if (type === DocumentApp.ElementType.TABLE) {
+      var table = child.asTable();
+      for (var r = 0; r < table.getNumRows(); r++) {
+        var row = table.getRow(r);
+        for (var c = 0; c < row.getNumCells(); c++) {
+          var cell = row.getCell(c);
+          for (var cc = 0; cc < cell.getNumChildren(); cc++) {
+            var cellChild = cell.getChild(cc);
+            if (cellChild.getType() === DocumentApp.ElementType.PARAGRAPH) {
+              var para = cellChild.asParagraph();
+              elementToIndex[para] = list.length;
+              list.push(para);
+            }
+          }
+        }
+      }
+    }
+  }
+  return { list: list, elementToIndex: elementToIndex };
+}
+
+/**
  * 사용자 매핑에 따라 문서 내 더미 인용을 정식 인용구로 일괄 치환.
- * 교체 후 Universal Sanitizer(cleanCitationFormat)로 괄호 안 중복·이중괄호 정리,
- * 최종 문자열(괄호 포함) 전체를 빨간색(#ff0000)으로 강제.
+ * 역순 처리(Bottom-Up): 끝→처음 순으로 교체해 인덱스 꼬임 방지.
+ * 원자적 교체: 해당 범위 전체 삭제 후 새 텍스트 삽입·색상 적용으로 중첩 방지.
+ * 교체 전 DocumentProperties에서 현재 스타일(APA/MLA/KCI)과 세부 설정을 읽어옴.
  */
 function applyMapping(mappingList) {
   var L = getLanguagePack();
@@ -1100,6 +1352,11 @@ function applyMapping(mappingList) {
     if (!mappingList || !Array.isArray(mappingList) || mappingList.length === 0) {
       return JSON.stringify({ ok: false, error: L.errors.noMappingData });
     }
+
+    // 스타일 설정 즉시 반영: DocumentProperties에서 현재 스타일·세부 설정 로드
+    var currentStyle = getStyleSetting();
+    var cfg = getEffectiveConfig();
+    cfg.citationStyle = currentStyle;
 
     var doc = DocumentApp.getActiveDocument();
     var body = doc.getBody();
@@ -1111,41 +1368,31 @@ function applyMapping(mappingList) {
     } catch (e) {}
     if (!Array.isArray(citationList)) citationList = [];
 
-    var replaced = 0;
-    for (var i = 0; i < mappingList.length; i++) {
-      var m = mappingList[i];
+    var textInfo = collectBodyTextElements(body);
+    var elementToIndex = textInfo.elementToIndex;
+
+    // 모든 교체 대상을 (element, start, end, replacementText) 형태로 수집
+    var replacements = [];
+    var idx;
+    for (idx = 0; idx < mappingList.length; idx++) {
+      var m = mappingList[idx];
       var dummyText = String(m.dummyText || '').trim();
       var realData = m.realData;
-      if (!dummyText) continue;
-      if (!realData || typeof realData !== 'object') continue;
+      if (!dummyText || !realData || typeof realData !== 'object') continue;
 
-      var replacementText = '';
-      if (realData.mode === 'manual') {
-        replacementText = getInTextCitationString(
-          realData.authorRaw || realData.author,
-          realData.secondVal || '',
-          realData.style || 'APA'
-        );
-      } else {
-        replacementText = (realData.shortText || realData.fullText || '').trim();
-      }
+      var replacementText = realData.mode === 'manual'
+        ? getFormattedCitation(realData, currentStyle)
+        : (realData.shortText || realData.fullText || '').trim();
       if (!replacementText) continue;
 
       var escapedSearch = escapeRegexForReplace(dummyText);
-      var safeReplacement = escapeReplacementText(replacementText);
-      body.replaceText(escapedSearch, safeReplacement);
-
-      var replEscaped = escapeRegexForReplace(safeReplacement);
-      var range = body.findText(replEscaped);
+      var range = body.findText(escapedSearch);
       while (range) {
         var el = range.getElement();
         var start = range.getStartOffset();
         var end = range.getEndOffsetInclusive();
-        try {
-          el.asText().setForegroundColor(start, end, '#ff0000');
-          replaced++;
-        } catch (colorErr) {}
-        range = body.findText(replEscaped, range);
+        replacements.push({ el: el, start: start, end: end, replacement: replacementText });
+        range = body.findText(escapedSearch, range);
       }
 
       if (!citationList.some(function(exist) {
@@ -1161,9 +1408,34 @@ function applyMapping(mappingList) {
       }
     }
 
+    // 역순 정렬: 문서 끝(인덱스 큰 쪽)부터 처리해 앞쪽 교체가 뒤쪽 인덱스에 영향 주지 않도록
+    replacements.sort(function(a, b) {
+      var ia = elementToIndex[a.el] != null ? elementToIndex[a.el] : -1;
+      var ib = elementToIndex[b.el] != null ? elementToIndex[b.el] : -1;
+      if (ib !== ia) return ib - ia;
+      return (b.end - a.end);
+    });
+
+    var RED = '#ff0000';
+    var replaced = 0;
+    for (idx = 0; idx < replacements.length; idx++) {
+      var r = replacements[idx];
+      if (!r.el || r.el.editAsText == null) continue;
+      var textEl = r.el.editAsText();
+      var start = r.start;
+      var end = r.end;
+      var replacement = r.replacement;
+      try {
+        textEl.deleteText(start, end);
+        textEl.insertText(start, replacement);
+        var newEnd = start + replacement.length - 1;
+        if (newEnd >= start) textEl.setForegroundColor(start, newEnd, RED);
+        replaced++;
+      } catch (err) {}
+    }
+
     props.setProperty('CITATION_LIST', JSON.stringify(citationList));
 
-    // 교체가 일어난 전체 단락·괄호 덩어리 재읽기: ((A); (B)) 정규식으로 찾아 내부 괄호 제거·중복 제거·바깥 괄호만 빨간색
     applyCleanCitationFormatToBody(body);
 
     return JSON.stringify({ ok: true, replaced: replaced });
@@ -1231,6 +1503,328 @@ function applyCleanCitationFormatToText(textEl, color) {
       rich.setForegroundColor(start, start + cleaned.length - 1, color || '#ff0000');
     } catch (err) {}
   }
+}
+
+/**
+ * 빨간 인용 텍스트에서 저자·연도·페이지 성분 추출. (저자, 연도) / (저자 연도) / (저자 페이지) 형태 모두 처리.
+ * @param {string} runText - 괄호 포함 가능한 인용 문자열
+ * @return {{ authorPart: string, year: string, page: string }}
+ */
+function parseInTextCitation(runText) {
+  var inner = String(runText || '').replace(/^[(\[]|[)\]]$/g, '').trim();
+  var authorPart = '';
+  var year = '';
+  var page = '';
+  if (!inner) return { authorPart: '', year: '', page: '' };
+  // 4자리 연도 (19xx, 20xx) 첫 출현 위치로 저자·연도 분리 (다중 인용 "A, 2020; B, 2019" 시 첫 인용만 사용)
+  var yearMatch = inner.match(/(19|20)\d{2}/);
+  if (yearMatch) {
+    year = yearMatch[0];
+    var idx = inner.indexOf(yearMatch[0]);
+    authorPart = (idx > 0 ? inner.substring(0, idx) : inner).replace(/[\s,;]+$/, '').trim();
+    return { authorPart: authorPart, year: year, page: page };
+  }
+  // MLA 스타일 페이지: "Author 5" 또는 "Author p. 5" / "pp. 5-6"
+  var pageMatch = inner.match(/\s+(?:p\.|pp\.)?\s*(\d+(?:-\d+)?)\s*$/i);
+  if (pageMatch) {
+    page = pageMatch[1];
+    authorPart = inner.substring(0, inner.indexOf(pageMatch[0])).replace(/[\s,]+$/, '').trim();
+  } else {
+    authorPart = inner;
+  }
+  return { authorPart: authorPart, year: year, page: page };
+}
+
+/**
+ * 파싱된 인용(저자·연도/페이지)과 일치하는 문헌을 citationList에서 찾음. 국문·영문 혼합 시 저자/연도로 매칭.
+ * @param {{ authorPart: string, year: string, page: string }} parsed - parseInTextCitation 결과
+ * @param {Array.<Object>} citationList - CITATION_LIST
+ * @return {Object|null} 매칭된 문헌 객체 또는 null
+ */
+function findCitationByParsed(parsed, citationList) {
+  if (!parsed || !citationList || !Array.isArray(citationList)) return null;
+  var authorPart = (parsed.authorPart || '').toLowerCase().replace(/\s+/g, ' ');
+  var year = (parsed.year || '').trim();
+  var page = (parsed.page || '').trim();
+  var best = null;
+  var bestScore = 0;
+  for (var i = 0; i < citationList.length; i++) {
+    var c = citationList[i];
+    if (c.mode === 'paste') continue;
+    var itemYear = (c.secondVal != null ? c.secondVal : c.year || '').toString().trim();
+    var itemAuthor = (c.authorRaw || c.author || '').trim();
+    var surname = (extractSurname(itemAuthor) || '').toLowerCase();
+    var score = 0;
+    if (year && itemYear && (itemYear === year || itemYear.slice(-2) === year.slice(-2))) score += 5;
+    if (authorPart && surname && authorPart.indexOf(surname) >= 0) score += 5;
+    if (authorPart && itemAuthor && itemAuthor.toLowerCase().indexOf(authorPart) >= 0) score += 3;
+    if (page && (c.page || '').toString().indexOf(page) >= 0) score += 2;
+    if (score > bestScore) {
+      bestScore = score;
+      best = c;
+    }
+  }
+  return bestScore > 0 ? best : null;
+}
+
+/**
+ * 단일 텍스트 요소 내 ( ... ) 형태 패턴을 모두 찾아 { el, start, end, text } 배열로 반환.
+ * 색상 무관. 인용 후보 탐색용.
+ */
+function findParenCitationRangesInElement(el) {
+  if (!el || el.editAsText == null) return [];
+  var rich = el.editAsText();
+  var text = rich.getText();
+  if (!text) return [];
+  var re = /\([^()]{1,100}\)/g;
+  var out = [];
+  var m;
+  while ((m = re.exec(text)) !== null) {
+    out.push({ el: el, start: m.index, end: m.index + m[0].length - 1, text: m[0] });
+  }
+  return out;
+}
+
+/**
+ * 문서 전체에서 빨간색·검은색(최종본) 인용구를 찾아 현재 선택 스타일로 교체하고 참고문헌 목록을 재생성.
+ * - 패턴 매칭: ( ... ) 형태 전수 검색. 괄호 안이 CITATION_LIST의 [저자] 또는 기존 인용 패턴과 일치하면 색상 무관(검은색 포함) 변환(재투고 모드).
+ * - 시각적 복구: 교체된 텍스트는 빨간색(#ff0000)으로 설정해 변환 결과 검토용 마킹.
+ * - 참고문헌 동기화: 마지막에 refreshBibliographySection을 호출해 참고문헌 목록을 현재 스타일에 맞춰 반드시 새로 그림.
+ * - 중복 제거: 한 괄호 안 동일 문헌은 getCitationDedupeKey·cleanCitationFormat으로 항상 제거.
+ */
+function refreshAllCitations() {
+  try {
+    var L = getLanguagePack();
+
+    // 스타일 설정 즉시 반영: DocumentProperties에서 현재 스타일·세부 설정 로드
+    var currentStyle = getStyleSetting();
+    var cfg = getEffectiveConfig();
+    cfg.citationStyle = currentStyle;
+
+    var props = PropertiesService.getDocumentProperties();
+    var citationList = [];
+    try {
+      var saved = props.getProperty('CITATION_LIST');
+      if (saved) citationList = JSON.parse(saved);
+    } catch (e) {}
+    if (!Array.isArray(citationList)) citationList = [];
+
+    var doc = DocumentApp.getActiveDocument();
+    var body = doc.getBody();
+    var RED = '#ff0000';
+    var textInfo = collectBodyTextElements(body);
+    var elementToIndex = textInfo.elementToIndex;
+    var list = textInfo.list;
+
+    // 1) 빨간색 런 수집 → (el, start, end, newText) 로 변환
+    var redRuns = [];
+    function collectRedRunsInElement(textEl, elRef) {
+      if (!textEl || !textEl.editAsText) return;
+      var rich = textEl.editAsText();
+      var len = rich.getText().length;
+      var start = 0;
+      while (start < len) {
+        var c = (rich.getForegroundColor(start) || '').toString().toLowerCase();
+        if (c === RED || c === '#ff0000') {
+          var end = start;
+          while (end < len) {
+            var cc = (rich.getForegroundColor(end) || '').toString().toLowerCase();
+            if (cc !== RED && cc !== '#ff0000') break;
+            end++;
+          }
+          if (end > start) {
+            var text = rich.getText().substring(start, end);
+            redRuns.push({ el: elRef, start: start, end: end - 1, text: text });
+          }
+          start = end;
+        } else {
+          start++;
+        }
+      }
+    }
+    for (var i = 0; i < list.length; i++) {
+      collectRedRunsInElement(list[i], list[i]);
+    }
+
+    var styles = ['APA', 'MLA', 'KCI'];
+    function findItemForRunText(runText) {
+      var item = null;
+      for (var j = 0; j < citationList.length && !item; j++) {
+        var cit = citationList[j];
+        for (var s = 0; s < styles.length; s++) {
+          var oldForm = getFormattedCitation(cit, styles[s]);
+          if (oldForm && runText === oldForm) {
+            item = cit;
+            break;
+          }
+        }
+      }
+      if (!item) {
+        var parsed = parseInTextCitation(runText);
+        item = findCitationByParsed(parsed, citationList);
+      }
+      if (!item) {
+        var inner = String(runText).replace(/^[(\[]|[)\]]$/g, '').trim();
+        for (var j = 0; j < citationList.length && !item; j++) {
+          var cit = citationList[j];
+          var authorRaw = (cit.authorRaw || cit.author || '').trim();
+          var surname = (extractSurname(authorRaw) || '').toLowerCase();
+          if (surname && inner.toLowerCase().indexOf(surname) >= 0) item = cit;
+        }
+      }
+      return item;
+    }
+    function runToReplacement(run) {
+      var runText = (run.text || '').trim();
+      if (!runText) return null;
+      var inner = String(runText).replace(/^[(\[]|[)\]]$/g, '').trim();
+      var parts = inner.indexOf(';') >= 0
+        ? inner.split(';').map(function(s) { return s.trim(); }).filter(function(s) { return s.length > 0; })
+        : [inner];
+      var items = [];
+      var seenKeys = {};
+      for (var p = 0; p < parts.length; p++) {
+        var part = parts[p];
+        var partWrapped = '(' + part + ')';
+        var item = findItemForRunText(partWrapped);
+        if (!item) continue;
+        var key = getCitationDedupeKey(item);
+        if (!key || seenKeys[key]) continue;
+        seenKeys[key] = true;
+        items.push(item);
+      }
+      if (items.length === 0) return null;
+      var formatted = items.map(function(it) { return getFormattedCitation(it, currentStyle); });
+      var newText = formatted.length === 1
+        ? formatted[0]
+        : cleanCitationFormat('(' + formatted.map(function(f) { return f.replace(/^[(\[]|[)\]]$/g, '').trim(); }).join('; ') + ')');
+      return { el: run.el, start: run.start, end: run.end, newText: newText };
+    }
+
+    var toReplace = [];
+    for (var r = 0; r < redRuns.length; r++) {
+      var rep = runToReplacement(redRuns[r]);
+      if (rep) toReplace.push(rep);
+    }
+
+    // 2) 검은색(최종본) 포함: ( ... ) 형태 전수 탐색, CITATION_LIST와 일치하면 변환 대상에 추가(재투고 모드)
+    var parenRuns = [];
+    for (var i = 0; i < list.length; i++) {
+      var ranges = findParenCitationRangesInElement(list[i]);
+      for (var j = 0; j < ranges.length; j++) {
+        parenRuns.push(ranges[j]);
+      }
+    }
+    for (var r = 0; r < parenRuns.length; r++) {
+      var run = parenRuns[r];
+      var overlap = false;
+      for (var t = 0; t < toReplace.length; t++) {
+        var existing = toReplace[t];
+        if (existing.el === run.el && existing.start <= run.end && existing.end >= run.start) {
+          overlap = true;
+          break;
+        }
+      }
+      if (overlap) continue;
+      var rep = runToReplacement(run);
+      if (rep) toReplace.push(rep);
+    }
+
+    // 역순 정렬: 문서 끝→처음
+    toReplace.sort(function(a, b) {
+      var ia = elementToIndex[a.el] != null ? elementToIndex[a.el] : -1;
+      var ib = elementToIndex[b.el] != null ? elementToIndex[b.el] : -1;
+      if (ib !== ia) return ib - ia;
+      return (b.end - a.end);
+    });
+
+    var replaced = 0;
+    for (var i = 0; i < toReplace.length; i++) {
+      var rep = toReplace[i];
+      if (!rep.el || rep.el.editAsText == null) continue;
+      var rich = rep.el.editAsText();
+      var start = rep.start;
+      var end = rep.end;
+      var newText = rep.newText;
+      try {
+        rich.deleteText(start, end);
+        rich.insertText(start, newText);
+        var newEnd = start + newText.length - 1;
+        if (newEnd >= start) rich.setForegroundColor(start, newEnd, RED);
+        replaced++;
+      } catch (err) {}
+    }
+
+    // 3) 참고문헌 목록 자동 동기화: 기존 참고문헌 구역 완전 삭제 후 재생성(refreshBibliographySection)
+    refreshBibliographySection(currentStyle, body, citationList);
+
+    return JSON.stringify({ ok: true, replaced: replaced, message: '참고문헌이 최신 스타일로 깔끔하게 재생성되었습니다.' });
+  } catch (e) {
+    var detail = (e && e.message) ? e.message : String(e);
+    var errMsg = (L && L.errors && L.errors.operationFailed) ? formatMessage(L.errors.operationFailed, { detail: detail }) : detail;
+    return JSON.stringify({ ok: false, error: errMsg });
+  }
+}
+
+/**
+ * 참고문헌 구역을 완전 삭제(Deep Clean)한 뒤 현재 스타일로 참고문헌 목록을 재생성.
+ * MLA면 and·연도 위치 등, APA면 &·연도 괄호 등 getFormattedBibliography로 일괄 적용.
+ */
+function refreshBibliographySection(style, body, citationList) {
+  if (!body) body = DocumentApp.getActiveDocument().getBody();
+  if (!citationList || !Array.isArray(citationList)) {
+    try {
+      var saved = PropertiesService.getDocumentProperties().getProperty('CITATION_LIST');
+      citationList = saved ? JSON.parse(saved) : [];
+    } catch (e) { citationList = []; }
+  }
+  var numChildren = body.getNumChildren();
+  var last20Start = numChildren - Math.max(1, Math.ceil(numChildren * 0.2));
+  var deleteFromIndex = -1;
+  for (var i = numChildren - 1; i >= 0; i--) {
+    var child = body.getChild(i);
+    if (child.getType() !== DocumentApp.ElementType.PARAGRAPH) continue;
+    var p = child.asParagraph();
+    if (p.getText().trim() !== '참고문헌') continue;
+    var heading = p.getHeading();
+    var isHeading = (heading !== DocumentApp.ParagraphHeading.NORMAL);
+    var isInLast20 = (i >= last20Start);
+    if (isHeading || isInLast20) {
+      deleteFromIndex = i;
+      break;
+    }
+  }
+  // [Patch] 기존 참고문헌 섹션 삭제 로직 (Last Paragraph Protection 대응)
+  if (deleteFromIndex >= 0) {
+    var totalChildren = body.getNumChildren();
+    for (var j = totalChildren - 1; j >= deleteFromIndex; j--) {
+      var child = body.getChild(j);
+      try {
+        body.removeChild(child);
+      } catch (e) {
+        if (child.getType() === DocumentApp.ElementType.PARAGRAPH) {
+          child.asParagraph().setText('');
+        }
+      }
+    }
+  }
+  var uniqueMap = {};
+  citationList.forEach(function(item) {
+    var key = item.mode === 'manual'
+      ? (item.author || '') + '|' + (item.secondVal || '') + '|' + (item.title || '')
+      : (item.fullText || '');
+    uniqueMap[key] = item;
+  });
+  var unique = [];
+  for (var k in uniqueMap) if (uniqueMap.hasOwnProperty(k)) unique.push(uniqueMap[k]);
+  unique.sort(function(a, b) { return (a.author || a.fullText || '').localeCompare(b.author || b.fullText || ''); });
+
+  body.appendPageBreak();
+  body.appendParagraph('참고문헌').setHeading(DocumentApp.ParagraphHeading.HEADING1);
+  unique.forEach(function(item) {
+    var line = getFormattedBibliography(item, style);
+    if (line && line.trim()) body.appendParagraph(line.trim());
+  });
 }
 
 /** 정규식 특수문자 이스케이프 (replaceText 검색 패턴용) */

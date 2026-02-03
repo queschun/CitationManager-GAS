@@ -111,6 +111,14 @@
     </style>
   </head>
   <body>
+    <div class="input-group" style="margin-bottom: 10px;">
+      <label for="styleSelect">인용 스타일</label>
+      <select id="styleSelect" onchange="handleStyleChange()">
+        <option value="APA">APA 7th</option>
+        <option value="MLA">MLA 9th</option>
+        <option value="KCI">국문 학술지</option>
+      </select>
+    </div>
     <div class="tab-container">
       <div id="tab1" class="tab active" onclick="switchTab(1)" data-i18n="ui.tabs.manual">직접 입력</div>
       <div id="tab2" class="tab" onclick="switchTab(2)" data-i18n="ui.tabs.paste">통째로 붙여넣기</div>
@@ -183,14 +191,10 @@
     </div>
 
     <div id="styleEntry" style="display: none;">
-      <p id="styleDesc" style="font-size: 11px; color: #666; margin-bottom: 8px;" data-i18n="ui.style.description">참고문헌 목록의 학회별 서식을 설정합니다.</p>
-      <div class="input-group">
-        <label data-i18n="ui.style.preset">스타일 프리셋</label>
-        <select id="stylePreset" onchange="onStylePresetChange()">
-          <option value="APA" data-i18n="ui.style.presetAPA">APA 7th</option>
-          <option value="MLA" data-i18n="ui.style.presetMLA">MLA</option>
-          <option value="Custom" data-i18n="ui.style.presetCustom">Custom</option>
-        </select>
+      <p id="styleDesc" style="font-size: 11px; color: #666; margin-bottom: 8px;">참고문헌 목록의 학회별 세부 서식(Style Settings)을 설정합니다.</p>
+      <div class="input-group" style="margin-bottom: 10px;">
+        <label>스타일 세부설정</label>
+        <p style="font-size: 11px; color: #888; margin: 4px 0 0 0;">위의 <strong>인용 스타일</strong>을 선택한 뒤, 아래 옵션으로 세부사항(쉼표, 이탤릭, 앰퍼샌드 등)을 조정합니다.</p>
       </div>
       <div class="checkbox-row">
         <input type="checkbox" id="italicsTitle" checked>
@@ -289,7 +293,8 @@
     </div>
     <div id="commonBibButtons" style="margin-top: 10px;">
       <button class="btn btn-green" onclick="handleGenerate()" data-i18n="ui.common.generateBibliography">참고문헌 목록 생성</button>
-      <button class="btn btn-red" onclick="handleClear()" data-i18n="ui.common.clearAll">데이터 전체 초기화</button>
+      <button class="btn btn-blue" onclick="handleRefreshAllCitations()" style="margin-top: 6px;">인용 일괄 변환</button>
+      <button class="btn btn-red" onclick="handleClear()" data-i18n="ui.common.clearAll" style="margin-top: 6px;">데이터 전체 초기화</button>
     </div>
     <p id="permissionHint" style="font-size: 10px; color: #888; margin-top: 8px;" data-i18n="ui.common.permissionHint">처음 사용 시 권한 허용 창이 뜨면 허용해 주세요.</p>
     <div id="preview" data-i18n="ui.common.previewWaiting">알림: 대기 중...</div>
@@ -328,15 +333,39 @@
         });
       }
 
+      function loadSettings() {
+        google.script.run.withSuccessHandler(function(result) {
+          try {
+            result = typeof result === 'string' ? JSON.parse(result) : result;
+          } catch (e) { result = {}; }
+          var style = (result && result.citationStyle) ? result.citationStyle : (result || 'APA');
+          var sel = document.getElementById('styleSelect');
+          if (sel && (style === 'APA' || style === 'MLA' || style === 'KCI')) sel.value = style;
+        }).withFailureHandler(function() {}).getStyleConfig();
+      }
+      function handleStyleChange() {
+        var sel = document.getElementById('styleSelect');
+        if (!sel) return;
+        var style = sel.value;
+        document.getElementById('preview').innerText = '⏳ 스타일 저장 중...';
+        google.script.run.withSuccessHandler(function() {
+          document.getElementById('preview').innerText = '✅ 스타일이 저장되었습니다. 해당 스타일 기본값이 세부설정에 반영됩니다.';
+          loadStyleConfig();
+        }).withFailureHandler(function(err) {
+          document.getElementById('preview').innerText = '❌ 저장 실패: ' + (err && (err.message || err)) || '';
+        }).saveStyleSetting(style);
+      }
       (function initI18n() {
         google.script.run.withSuccessHandler(function(pack) {
           LANG_PACK = pack || {};
           applyI18n();
           loadCitationList();
+          loadSettings();
         }).withFailureHandler(function() {
           LANG_PACK = {};
           applyI18n();
           loadCitationList();
+          loadSettings();
         }).getLanguagePack();
       })();
 
@@ -441,7 +470,8 @@
         google.script.run.withSuccessHandler(function(result) {
           try { result = (typeof result === 'string') ? JSON.parse(result) : result; } catch (e) { result = {}; }
           var c = result.config || {};
-          document.getElementById('stylePreset').value = result.preset || 'APA';
+          var styleSelect = document.getElementById('styleSelect');
+          if (styleSelect && (result.citationStyle === 'APA' || result.citationStyle === 'MLA' || result.citationStyle === 'KCI')) styleSelect.value = result.citationStyle;
           document.getElementById('italicsTitle').checked = c.italicsTitle !== false;
           document.getElementById('italicsJournal').checked = c.italicsJournal !== false;
           document.getElementById('korItalicsJournal').checked = c.korItalicsJournal === true;
@@ -459,29 +489,8 @@
         }).getStyleConfig();
       }
 
-      function onStylePresetChange() {
-        var preset = document.getElementById('stylePreset').value;
-        if (preset === 'Custom') return;
-        var defs = preset === 'APA'
-          ? { italicsTitle: true, italicsJournal: true, yearBracket: '()', authorSeparator: ', ', etAlThreshold: 3, korUsePagePrefix: false, lineSpacing: 12, hangingIndent: 20, indentFirstLine: 0, headerFontSize: 14, headerAlignment: 'CENTER' }
-          : { italicsTitle: true, italicsJournal: true, yearBracket: 'none', authorSeparator: ', ', etAlThreshold: 3, korUsePagePrefix: false, lineSpacing: 12, hangingIndent: 20, indentFirstLine: 0, headerFontSize: 14, headerAlignment: 'CENTER' };
-        document.getElementById('italicsTitle').checked = defs.italicsTitle;
-        document.getElementById('italicsJournal').checked = defs.italicsJournal;
-        var korManual = document.getElementById('korUsePagePrefixManual');
-        if (korManual) korManual.checked = defs.korUsePagePrefix === true;
-        document.getElementById('yearBracket').value = defs.yearBracket;
-        document.getElementById('authorSeparator').value = defs.authorSeparator || ', ';
-        document.getElementById('etAlThreshold').value = defs.etAlThreshold || 3;
-        document.getElementById('lineSpacing').value = defs.lineSpacing;
-        document.getElementById('hangingIndent').value = defs.hangingIndent;
-        document.getElementById('indentFirstLine').value = defs.indentFirstLine || 0;
-        document.getElementById('headerFontSize').value = defs.headerFontSize;
-        document.getElementById('headerAlignment').value = defs.headerAlignment || 'CENTER';
-      }
-
       function handleSaveStyle() {
-        var preset = document.getElementById('stylePreset').value;
-        var config = {
+        var overrides = {
           italicsTitle: document.getElementById('italicsTitle').checked,
           italicsJournal: document.getElementById('italicsJournal').checked,
           korItalicsJournal: document.getElementById('korItalicsJournal').checked,
@@ -501,7 +510,7 @@
           document.getElementById('preview').innerText = result.error ? t('messages.errorPrefix') + result.error : t('messages.styleSaved');
         }).withFailureHandler(function(err) {
           document.getElementById('preview').innerText = t('messages.errorPrefix') + ((err && (err.message || err.error || err)) || String(err));
-        }).saveStyleConfig({ config: config, preset: preset });
+        }).saveStyleConfig({ overrides: overrides });
       }
 
       function formatAuthorsForInText(str) {
@@ -679,6 +688,25 @@
           preview.className = 'preview-error';
           preview.innerText = t('messages.errorPrefix') + msg;
         }).generateBibliography();
+      }
+
+      function handleRefreshAllCitations() {
+        var preview = document.getElementById('preview');
+        preview.className = '';
+        preview.innerText = '⏳ 인용 일괄 변환 중...';
+        google.script.run.withSuccessHandler(function(result) {
+          try { result = (typeof result === 'string') ? JSON.parse(result) : result; } catch (e) { result = {}; }
+          if (result && result.ok) {
+            preview.innerText = '✅ ' + (result.replaced || 0) + '개 인용 변환 완료. ' + (result.message || '참고문헌이 최신 스타일로 깔끔하게 재생성되었습니다.');
+          } else {
+            preview.className = 'preview-error';
+            preview.innerText = '❌ ' + (result && result.error ? result.error : '오류가 발생했습니다.');
+          }
+        }).withFailureHandler(function(err) {
+          var msg = (err && (err.message || err.error || err)) || String(err);
+          document.getElementById('preview').className = 'preview-error';
+          document.getElementById('preview').innerText = '❌ ' + msg;
+        }).refreshAllCitations();
       }
 
       function handleClear() {
